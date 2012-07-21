@@ -1,5 +1,5 @@
 {
-  "name"    : "extopus",
+  "name"    : "qr",
 
   "include" :
   [
@@ -11,6 +11,7 @@
   "export" :
   [
     "api",
+    "api-data",
     "build",
     "clean",
     "distclean",
@@ -22,20 +23,25 @@
     "pretty",
     "profiling",
     "source",
-    "source-hybrid",
     "source-all",
+    "source-hybrid",    
+    "simulation-build",
+    "simulation-run",
     "test",
     "test-source",
     "translation"
   ],
+  
+  "default-job" : "source-hybrid",
 
   "let" :
   {
-    "APPLICATION"  : "ep",
-    "QXTHEME"      : "ep.theme.Theme",
-    "API_EXCLUDE"  : ["qx.test.*"],
+    "APPLICATION"  : "qr",
+    "QOOXDOO_PATH" : "../../../../../../usr/pack/qooxdoo-2.0.1-za/frontend",
+    "QXTHEME"      : "qr.theme.Theme",
+    "API_EXCLUDE"  : ["qx.test.*", "${APPLICATION}.theme.*", "${APPLICATION}.test.*", "${APPLICATION}.simulation.*"],
     "LOCALES"      : [ "en" ],
-    "CACHE"        : "./cache",
+    "CACHE"        : "${TMPDIR}/qx${QOOXDOO_VERSION}/cache",
     "ROOT"         : "."
   },
 
@@ -44,22 +50,38 @@
 
   "jobs" :
   {
-   "libraries" : {
-       "library" : [
-       {
-         "manifest"   : "contrib://CanvasCell/trunk/Manifest.json"
-       }
-       ]
-    },
-
-
-    "build" :
+    // Uncomment the following entry to add a contrib or library to your
+    // project; make sure to adapt the path to the Manifest.json; if you are
+    // using a contrib: library, it will be downloaded into the path specified
+    // by the 'cache/downloads' config key
+    /*
+    "libraries" : 
     {
-//      "copy-files": {
-//          "files" : [ "resource/excanvas.js" ]
-//       }
-     },
-     "pretty" :
+      "library" :
+      [
+        {
+          "manifest" : "contrib://SkeletonApplication/trunk/Manifest.json"
+        }
+      ]
+    }
+    */
+
+    // If you want to tweak a job setting, see the following sample where
+    // the "format" feature of the "build-script" job is overridden.
+    // To see a list of available jobs, invoke 'generate.py x'.
+	/*
+    ,"build-script" :
+    {
+      "compile-options" : 
+      {
+        "code" :
+        {
+          "format" : false
+        }
+      }
+    }
+    */
+    , "pretty" :
      {
         "pretty-print" : 
         {
@@ -86,5 +108,5 @@
             }
         }
     }
-  }
+   }
 }

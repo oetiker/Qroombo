@@ -1,12 +1,12 @@
 {
   "info" : 
   {
-    "name" : "extopus",
+    "name" : "qr",
 
-    "summary" : "Extopus - Aggregating Monitor",
-    "description" : "A generic frontend to monitoring applications.",
+    "summary" : "Quick Room Reservation System",
+    "description" : "An application for interactive room reservation.",
     
-    "homepage" : "http://www.extopus.org/",
+    "homepage" : "http://www.qroobo.org/",
 
     "license" : "GPLv3",
     "authors" : 
@@ -17,13 +17,13 @@
       }
     ],
 
-    "version" : "#VERSION#",
-    "qooxdoo-versions": ["1.6"]
+    "version" : "trunk",
+    "qooxdoo-versions": ["2.0.1"]
   },
   
   "provides" : 
   {
-    "namespace"   : "ep",
+    "namespace"   : "qr",
     "encoding"    : "utf-8",
     "class"       : "source/class",
     "resource"    : "source/resource",
@@ -31,3 +31,4 @@
     "type"        : "application"
   }
 }
+
