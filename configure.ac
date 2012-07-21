@@ -18,7 +18,7 @@
 
 # project specific lines
 
-AC_INIT([qroombo],[0.1],[tobi@oetiker.ch])
+AC_INIT([qroombo],[0.1.0],[tobi@oetiker.ch])
 
 AC_PREFIX_DEFAULT(/opt/qroombo-$PACKAGE_VERSION)
 
