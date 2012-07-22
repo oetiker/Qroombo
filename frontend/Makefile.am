@@ -15,7 +15,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
 AUTOMAKE_OPTIONS=foreign
-QX_CLASS=ep
+QX_CLASS=qr
 
 EXTRA_DIST = config.json Manifest.json source/index.html $(shell find source/class/ -name "*.js") $(wildcard source/translation/*.po source/resource/*/*.png  source/resource/*/*.gif)
 
@@ -33,7 +33,7 @@ $(GENTARGETS):
 source-full:
 	$(QOOXDOO_PATH)/tool/bin/generator.py -m QOOXDOO_PATH:$(QOOXDOO_PATH) -m CACHE:./cache source
 	
-source/script/$(QX_CLASS).js: $EXTRA_DIST
+source/script/$(QX_CLASS).js: $(EXTRA_DIST)
 	$(QOOXDOO_PATH)/tool/bin/generator.py -m QOOXDOO_PATH:$(QOOXDOO_PATH) -m CACHE:./cache source-hybrid
 
 endif

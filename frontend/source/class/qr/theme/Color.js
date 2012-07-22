@@ -8,11 +8,7 @@
 
 ************************************************************************ */
 
-qx.Theme.define("qr.theme.Color",
-{
-  extend : qx.theme.modern.Color,
-
-  colors :
-  {
-  }
+qx.Theme.define("qr.theme.Color", {
+    extend : qx.theme.modern.Color,
+    colors : {}
 });

@@ -8,11 +8,7 @@
 
 ************************************************************************ */
 
-qx.Theme.define("qr.theme.Decoration",
-{
-  extend : qx.theme.modern.Decoration,
-
-  decorations :
-  {
-  }
+qx.Theme.define("qr.theme.Decoration", {
+    extend      : qx.theme.modern.Decoration,
+    decorations : {}
 });
