@@ -6,85 +6,258 @@
 ************************************************************************ */
 
 /**
-  * calendar widget, showing a days bookings
+  * calendar widget, showing a days reservations
   */
 qx.Class.define("qr.ui.Booker", {
     extend : qx.ui.core.Widget,
-    construct : function() {                
+    type: 'singleton',
+    construct : function() {
         this.base(arguments);
         this.set({
             backgroundColor: 'black'
         });
-        this._setLayout(new qx.ui.layout.Grid(1,1));
-        this._cols = [ 'Salon', 'Küche', 'Sitzung', 'Bernstein', 'Rose','Flora'];
-        this._rows = [];
-        for (var slot=7;slot<=23;slot++){
-	   this._rows.push(String(slot)+'-'+String(slot+1));
-        }
+        this._cfg = qr.data.Config.getInstance();
+        this._setLayout(new qx.ui.layout.Canvas());
+        this._reservationMap = {};
+        this._activeMarkerStack = [];
+        this._otherMarkerStack = [];
+        this._occupyMap = {};
+        this._rowToRoomId = {};
         this._populate();
         this._addMouse();
     },
     properties: {
     },
     events: {
+        cleardrag: 'qx.event.type.Event'
     },
     members : {
-        _rows: null,
-        _cols: null,
         _colWgt: null,
         _rowWgt: null,
+        _reservationMap: null,
+        _occupyMap: null,
+        _activeMarkerStack: null,
+        _otherMarkerStack: null,
+        _cfg: null,
+        _rowToRoomId: null,
+        clearReservations: function(){            
+            var overlay = this.getChildControl('overlay');
+            for (var item in this._reservationsMap){
+                overlay._remove(item);
+                if (item.getUserData('reservation').getEditable()){
+                    this._activeMarkerStack.push(item);
+                }
+                else {
+                    this._otherMarkerStack.push(item);
+                }
+            }
+            this._occupyMap = {};
+        },
+        addReservation: function(reservation){
+            var marker = this._mkMarker(reservation);
+            var overlay = this.getChildControl('overlay');
+            var row = reservation.getRow();
+            var col = reservation.getColumn();
+            var span = reservation.getColSpan();
+            overlay._add(marker,{row: row,column: col, colSpan: span});
+            for (var i = col;i < col+span;i++){
+                this._occupyMap[String(i)+':'+String(row)] = true;
+            }
+        },
+        removeReservation: function(reservationId){
+            var overlay = this.getChildControl('overlay');  
+            var item = this._rservationsMap[reservationId];
+            var reservation = item.getUserData('reservation');
+            var row = reservation.getRow();
+            var col = reservation.getColumn();
+            var span = reservation.getColSpan();     
+            for (var i = col; i < col + span;i++){
+                this._occupyMap[String(i)+':'+String(row)] = false;
+            }
+            overlay._remove(item); 
+        },
+        _mkMarker: function(reservation){
+            var marker;
+            if (reservation.getEditable()){
+                if (this._activeMarkerStack.length){
+                    marker = this._activeMarkerStack.pop();   
+                }
+                else {
+                    marker = new qx.ui.basic.Atom().set({
+                        backgroundColor: '#eef',
+                        center: true,
+                        cursor: 'pointer',
+                        width: 20
+                    });  
+                    marker.addListener('mouseover',function(){
+                        marker.setBackgroundColor('#eff');
+                    });                  
+                    marker.addListener('mouseout',function(){
+                        marker.setBackgroundColor('#eef');
+                    });                  
+                    marker.addListener('click',function(){
+                        var detail = qr.ui.Reservation.getInstance();
+                        detail.show(marker.getUserData('reservation'),
+                        function(reservation){
+                        },this);                    
+                        this.fireEvent('cleardrag');
+                    },this);                  
+                }
+            }
+            else {
+                if (this._otherMarkerStack.length){
+                    marker = this._otherMarkerStack.pop();   
+                }
+                else {
+                    marker = new qx.ui.basic.Atom().set({
+                        backgroundColor: '#eee',
+                        center: true
+                    });  
+                }
+            }
+            this._reservationMap[reservation.reservationId] = marker;
+            marker.setUserData('reservation',reservation);
+            marker.setLabel(String(reservation.getStartHr())+' - '+String(reservation.getDuration()+reservation.getStartHr()));
+            return marker;
+        },
+        _createChildControlImpl : function(id) {
+            var control =  new qx.ui.core.Widget();
+            var grid = new qx.ui.layout.Grid(1,1);
+            control._setLayout(grid);
+            this._add(control,{left:0,top:0,right:0,bottom:0});
+            return control || this.base(arguments, id);
+        },            
         _populate: function(){
             var that = this;
-	    this._rowWgt = [];
-            this._rows.forEach(function(slot,row){                
-                var rl = new qx.ui.basic.Label(slot).set({
-                    padding: [ 2,3,3,2],
-                    backgroundColor: '#fff',
-                    allowGrowX: true,
-                    allowGrowY: true,
-		    textAlign: 'center'
-                });
+    	    this._rowWgt = [];
+            var grid = this.getChildControl('grid');
+            var gridLayout = grid._getLayout();
+            var overlay = this.getChildControl('overlay');
+            var overlayLayout = overlay._getLayout();
+            grid._add(this._mkCell(null,'#fff'),{row:0,column:0});
+            var roomIds = this._cfg.getRoomIdArray();
+            var roomNames = this._cfg.getRoomIdMap();
+            roomIds.forEach(function(room,row){
+                var rl = that._mkCell(roomNames[room],'#fff');
+                this._rowToRoomId[row+1] = room;
                 that._rowWgt.push(rl);
-                that._add(rl,{row: row+1,column: 0});
-	    });
+                grid._add(rl,{row: row+1,column: 0});
+                gridLayout.setRowFlex(row+1,1);
+                overlayLayout.setRowFlex(row+1,1);
+                overlay._add(that._mkCell(),{row: row+1,column: 0});
+            },this);
             this._colWgt = [];
-            this._cols.forEach(function(room,col){                
-                var cl =  new qx.ui.basic.Label(room).set({   
-                    padding: [ 2,3,3,2],
-                    backgroundColor: '#fff',
-                    allowGrowX: true,
-                    allowGrowY: true
-                });
+            gridLayout.setColumnWidth(0,130);
+            overlayLayout.setColumnWidth(0,130);
+            var start = this._cfg.getFirstHr();
+            var end = this._cfg.getLastHr();
+            for (var hour=start,col=1;hour<end;col++,hour++){
+                var cl =  this._mkCell(String(hour),'#fff');
+                cl.setTextAlign('center');
                 that._colWgt.push(cl);                
-                that._add(cl,{row: 0,column: col+1});
-	    });
+                grid._add(cl,{row: 0,column: col});
+                overlay._add(this._mkCell(),{row: 0,column: col});
+                gridLayout.setColumnFlex(col,1);
+                overlayLayout.setColumnFlex(col,1);
+                gridLayout.setColumnWidth(col,30);
+                overlayLayout.setColumnWidth(col,30);
+                roomIds.forEach(function(room,row){
+                    var cell = that._mkCell(null,'#fff');
+                    grid._add(cell,{row:row+1,column:col});
+                });
+            }
+        },
+        _mkCell: function(text,bgColor){
+            var cell = new qx.ui.basic.Label().set({
+                padding: [2,3,3,2],   
+                allowGrowX: true,
+                allowGrowY: true,
+                allowShrinkY: true
+            });
+            if (bgColor){
+                cell.setBackgroundColor(bgColor);
+            }
+            if (text){
+                cell.setValue(text);
+            }
+            return cell;                        
+        },
+        clearDragMarker: function(){
+            var overlay = this.getChildControl('overlay');
+            overlay._remove(this._dragMarker);
         },
         _addMouse: function(){	    
-	    var drag = new qx.ui.basic.Label('*').set({
-                backgroundColor: '#fff',
+    	    var start;
+            var begin;
+            var len;
+	        var down = false;
+            var overlay = this.getChildControl('overlay');
+            var drag = this._dragMarker = new qx.ui.basic.Atom().set({
+                backgroundColor: '#fee',
+                center: true,
                 allowGrowX: true,
-                allowGrowY: true
+                allowShrinkX: true
             });
-	    var start;
-	    var down = false;
+            var firstHr = this._cfg.getFirstHr();
             this.addListener('mousedown',function(e){
                 start = this._posToGrid(e);
+                if (this._occupyMap[String(start.col)+':'+String(start.row)]){
+                    return;            
+                }                                
+                this.capture();
+                overlay._add(drag,{column: start.col,row: start.row,colSpan: 1});                
+                begin = start.col + firstHr - 1;
+                len = 1;
+                drag.setLabel(String(begin)+' - '+String(begin+len));
                 down = true;
-	    },this);
+            },this);
             this.addListener('mouseup',function(e){
-                down = false
-	    },this);
+                if (down){
+                    down = false;
+                    var detail = qr.ui.Reservation.getInstance();
+                    detail.show(new qr.data.Reservation().set({
+                        startHr: begin,
+                        duration: len,
+                        roomId: this._rowToRoomId[start.row],
+                        editable: true
+                    }),function(reservation){
+                        this.fireEvent('cleardrag');
+                        this.addReservation(reservation);  
+                    },this);                    
+                }            
+            },this);
+            
             this.addListener('mousemove',function(e){
                 if (down){
                     var cell = this._posToGrid(e);
-		    if (cell.row < start.row){
-                        var tmp = cell.row;
-                        cell.row = start.row;
-                        start.row = tmp;
-		    }
-                    this._add(drag,{column: start.col+1,row: start.row+1,rowSpan: cell.row - start.row + 1});
+	                if (cell.col < start.col){                        
+                        for (var col=cell.col;col<=start.col;col++){
+                            if (this._occupyMap[String(col)+':'+String(start.row)]){
+                                return;
+                            }
+                        }
+                        begin = cell.col + firstHr - 1 ;
+                        len = start.col - cell.col + 1;
+                        overlay._add(drag,{column: cell.col,row: start.row,colSpan: len});
+                
+                    }
+	                else {
+                        for (var col=start.col;col<=cell.col;col++){
+                            if (this._occupyMap[String(col)+':'+String(start.row)]){
+                                return;
+                            }
+                        }
+                        len = cell.col - start.col + 1;
+                        overlay._add(drag,{column: start.col,row: start.row,colSpan: len});
+                    }
+                    drag.setLabel(String(begin)+' - '+String(begin+len));
                 }
-	    },this);
+	        },this);
+            this.addListener('cleardrag',function(e){
+                if (drag.getLayoutParent()){
+                    overlay._remove(drag);                
+                }
+            });
         },
         _posToGrid: function(e){
             var left = e.getDocumentLeft();
@@ -104,12 +277,12 @@ qx.Class.define("qr.ui.Booker", {
                 var el = wgt.getContainerElement().getDomElement();
                 if (el){
                     var pos = qx.bom.element.Location.get(el);
-	            if (pos.top <= top){
+    	            if (pos.top <= top){
                         row = r;
                     }
                 }
             });
-	    return {col:col,row:row};
+    	    return {col:col+1,row:row+1};
         }
     }
 });

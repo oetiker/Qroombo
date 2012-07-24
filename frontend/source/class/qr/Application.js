@@ -29,11 +29,38 @@ qx.Class.define("qr.Application", {
                 qx.log.appender.Console;
             }
             var root = this.getRoot();
-            var booker = new qr.ui.Booker;
+            var cfg = qr.data.Config.getInstance().set({
+                firstHr: 7,
+                lastHr: 24,
+                roomIdArray: ['salon','sitzung','bernstein','kueche','flora','rosa'],
+                roomIdMap: {
+                    salon: 'Salon',
+                    sitzung: 'Sitzungszimmer',
+                    bernstein: 'Bernsteinzimmer',
+                    kueche: 'Küche',
+                    flora: 'Flora',
+                    rosa: 'Rosa'
+                }
+            });
+            var booker = qr.ui.Booker.getInstance();
             root.add(booker, {
                 left   : 20,
-                top    : 20
+                top    : 20,
+                bottom : 20,
+                right  : 20
             });
+            booker.addReservation(new qr.data.Reservation().set({
+                roomId: 'salon',
+                startHr: 9,
+                duration: 3,
+                editable: true
+            }));
+            booker.addReservation(new qr.data.Reservation().set({
+                roomId: 'flora',
+                startHr: 11,
+                duration: 3,
+                editable: false
+            }));
         }
     }
 });

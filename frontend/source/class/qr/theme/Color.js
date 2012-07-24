@@ -9,6 +9,6 @@
 ************************************************************************ */
 
 qx.Theme.define("qr.theme.Color", {
-    extend : qx.theme.modern.Color,
+    extend : qx.theme.indigo.Color,
     colors : {}
 });
