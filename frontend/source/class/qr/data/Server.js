@@ -39,7 +39,7 @@ qx.Class.define('qr.data.Server', {
 
             var superHandler = function(ret, exc, id) {
                 if (exc) {
-                    ep.ui.MsgBox.getInstance().exc(exc);
+                    qr.ui.MsgBox.getInstance().exc(exc);
                 } else {
                     origHandler(ret);
                 }

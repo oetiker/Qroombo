@@ -124,7 +124,7 @@ qx.Class.define("qr.ui.Reservation", {
                 width: 50
             });
             row.add(deleteButton,{flex: 1});
-            var cancelButton = new qx.ui.form.Button(this.tr("Cancle"),'icon/22/actions/dialog-cancel.png').set({
+            var cancelButton = new qx.ui.form.Button(this.tr("Cancel"),'icon/22/actions/dialog-cancel.png').set({
                 width: 50
             });
             row.add(cancelButton,{flex: 1});

@@ -14,7 +14,7 @@ qx.Class.define("qr.ui.Booker", {
     construct : function() {
         this.base(arguments);
         this.set({
-            backgroundColor: 'black'
+            backgroundColor: 'white-box-border'
         });
         this._cfg = qr.data.Config.getInstance();
         this._setLayout(new qx.ui.layout.Canvas());
@@ -27,6 +27,10 @@ qx.Class.define("qr.ui.Booker", {
         this._addMouse();
     },
     properties: {
+        date: {
+            check: 'Date',
+            apply: '_applyDate'
+        }
     },
     events: {
         cleardrag: 'qx.event.type.Event'
@@ -42,7 +46,8 @@ qx.Class.define("qr.ui.Booker", {
         _rowToRoomId: null,
         clearReservations: function(){            
             var overlay = this.getChildControl('overlay');
-            for (var item in this._reservationsMap){
+            for (var key in this._reservationMap){
+                var item = this._reservationMap[key];
                 overlay._remove(item);
                 if (item.getUserData('reservation').getEditable()){
                     this._activeMarkerStack.push(item);
@@ -50,6 +55,7 @@ qx.Class.define("qr.ui.Booker", {
                 else {
                     this._otherMarkerStack.push(item);
                 }
+                delete this._reservationMap[key];
             }
             this._occupyMap = {};
         },
@@ -66,7 +72,7 @@ qx.Class.define("qr.ui.Booker", {
         },
         removeReservation: function(reservationId){
             var overlay = this.getChildControl('overlay');  
-            var item = this._rservationsMap[reservationId];
+            var item = this._reservationMap[reservationId];
             var reservation = item.getUserData('reservation');
             var row = reservation.getRow();
             var col = reservation.getColumn();
@@ -115,7 +121,7 @@ qx.Class.define("qr.ui.Booker", {
                     });  
                 }
             }
-            this._reservationMap[reservation.reservationId] = marker;
+            this._reservationMap[reservation.getReservationId()] = marker;
             marker.setUserData('reservation',reservation);
             marker.setLabel(String(reservation.getStartHr())+' - '+String(reservation.getDuration()+reservation.getStartHr()));
             return marker;
@@ -134,11 +140,13 @@ qx.Class.define("qr.ui.Booker", {
             var gridLayout = grid._getLayout();
             var overlay = this.getChildControl('overlay');
             var overlayLayout = overlay._getLayout();
-            grid._add(this._mkCell(null,'#fff'),{row:0,column:0});
+            grid._add(this._mkCell(null,'background'),{row:0,column:0});
             var roomIds = this._cfg.getRoomIdArray();
             var roomNames = this._cfg.getRoomIdMap();
             roomIds.forEach(function(room,row){
-                var rl = that._mkCell(roomNames[room],'#fff');
+                var rl = that._mkCell(roomNames[room],'background').set({
+                    padding: [ 5,5,5,10 ]
+                });
                 this._rowToRoomId[row+1] = room;
                 that._rowWgt.push(rl);
                 grid._add(rl,{row: row+1,column: 0});
@@ -152,7 +160,7 @@ qx.Class.define("qr.ui.Booker", {
             var start = this._cfg.getFirstHr();
             var end = this._cfg.getLastHr();
             for (var hour=start,col=1;hour<end;col++,hour++){
-                var cl =  this._mkCell(String(hour),'#fff');
+                var cl =  this._mkCell(String(hour),'background');
                 cl.setTextAlign('center');
                 that._colWgt.push(cl);                
                 grid._add(cl,{row: 0,column: col});
@@ -162,17 +170,18 @@ qx.Class.define("qr.ui.Booker", {
                 gridLayout.setColumnWidth(col,30);
                 overlayLayout.setColumnWidth(col,30);
                 roomIds.forEach(function(room,row){
-                    var cell = that._mkCell(null,'#fff');
+                    var cell = that._mkCell(null,'background');
                     grid._add(cell,{row:row+1,column:col});
                 });
             }
         },
         _mkCell: function(text,bgColor){
             var cell = new qx.ui.basic.Label().set({
-                padding: [2,3,3,2],   
+                padding: [3,3,3,3],
                 allowGrowX: true,
                 allowGrowY: true,
-                allowShrinkY: true
+                allowShrinkY: true,
+                minHeight: 25
             });
             if (bgColor){
                 cell.setBackgroundColor(bgColor);
@@ -219,7 +228,8 @@ qx.Class.define("qr.ui.Booker", {
                         startHr: begin,
                         duration: len,
                         roomId: this._rowToRoomId[start.row],
-                        editable: true
+                        editable: true,
+                        reservationId: Math.random()
                     }),function(reservation){
                         this.fireEvent('cleardrag');
                         this.addReservation(reservation);  
@@ -283,6 +293,9 @@ qx.Class.define("qr.ui.Booker", {
                 }
             });
     	    return {col:col+1,row:row+1};
+        },
+        _applyDate: function(oldDate,newDate){
+            this.clearReservations();
         }
     }
 });
