@@ -1,4 +1,4 @@
-package QR::Database;
+<package QR::Database;
 use strict;
 use warnings;
 use Data::Dumper;
@@ -249,21 +249,44 @@ sub _getRawEntry {
     return $dbh->selectrow_hashref("SELECT * FROM $table WHERE $recField = ?",{},$recId);
 }
 
+# remove extra fields from data hash and return a extra hash containing those
+# that are available according to the access list
 sub _extraFilter {
     my $self = shift;
     my $section = shift;
     my $data = shift;
+    my $mode = shift // 'read';
     my $cfg = $self->cfg->config->{$section};
     my %ret;
     if ($cfg->{EXTRA_FIELDS_PL}){
         my $extraFields = $cfg->{EXTRA_FIELDS_PL}();
         for my $field (@$extraFields){
             my $key = $field->{key};
-            $ret{$key} = $data->{$key};
+            my $accessClass = $self->adminMode ? 'admin' : 'user';
+            my $access = $field->{access}{$accessClass} // 'write';
+            my $value = $data->{$key};
+            delete $data->{$key};
+            next if $access ~~ 'none';
+            next if $mode ~~ 'write' and $access ~~ 'read';
+            $ret{$key} = $value;
         }
     }
     return \%ret;
 }
+
+# apply extra filter to an array of data
+sub _arrayExtraFilter {
+    my $self = shift;
+    my $section = shift;
+    my $data = shift;
+    for my $row (@$data){
+        my $extra = $self->_extraFilter('ADDRESS',$row);
+        for my $key (keys %$extra) {
+            $row->{$key} = $extra->{$key} 
+        }
+    }
+}
+
 
 sub getEntry {
     my $self = shift;
@@ -272,8 +295,9 @@ sub getEntry {
     my $dbh = $self->dbh;
     my $rec = $self->_getRawEntry($table,$table.'_id',$recid);   
     my $extra = {};
-    if ($rec->{$table_extra}){
+    if ($rec->{$table.'_extra'}){
         $extra = $self->json->decode($rec->{$table.'_extra'});        
+        delete $rec->{$table.'_extra'}};
     }
     my $cfg = $self->cfg->config;
     given($table){
@@ -353,10 +377,12 @@ sub putEntry {
             $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkError(95334,"No premission to edit address record")
                 unless $adus->{adus_id} or not $recId or $self->adminMode;
+            $extra = $self->_extraFilter('ADDRESS',$rec,'write');
         }
         when ('user'){
             die mkError(38344,"No permission to edit user details")
                 unless not $recId or $recId ~~ $self->userId or  $self->adminMode;
+            $extra = $self->_extraFilter('USRE',$rec,'write');
         }
         when ('resv'){
             my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
@@ -370,6 +396,7 @@ sub putEntry {
                 });
             }            
             $rec->{resr_adus} = $adusId;            
+            $extra = $self->_extraFilter('RESERVATION',$rec,'write');
         }
         when ('acct'){
             die mkError(8744,"Only admin can enter booking records") unless $self->adminMode;
@@ -383,14 +410,157 @@ sub putEntry {
             die mkError(3945,"Table $table not open for edit");
         }
     }
+    my $tableQ = $dbh->quote_identifier($table);          
+    my $recIdQ = $dbh->quote_identifier($table.'_id');          
+    my $extraQ = $dbh->quote_identifier($table.'_extra');          
+    my @keys = sort keys %$rec;
     if ($recId){
-        
-        $dbh->do(<<SQL_END);
+        my @setValues;
+        my $sqlSet = join ", ", map {
+            push @setValues, $rec->{$_};
+            "SET ".$dbh->quote_identifier($_)." = ?"
+        } @keys;
+        if ($extra){
+            $sqlSet .= ", $extraQ = ?";
+            push @setValues, $self->json->encode($extra);
+        }
+        $dbh->do(<<SQL_END,{},@setValues,$recId);
+UPDATE $tableQ $sqlSet WHERE $recIdQ = ?
 SQL_END
     }
+    else {
+        my @setValues;
+
+        my $keys = join ", ", map {
+            $dbh->quote_identifier($_)
+        } @keys;
+        if (
+        my $placeholders = join ", ", map { '?' } @keys;
+        my @values = map { $rec->{$_} } @keys;
+            
+        $dbh->do(<<SQL_END,{},@values,$extra);
+INSERT INTO $tableQ ($keys) VALUES ( $placeholders )
+SQL_END
+        $recId = $dbh->last_insert_id("","","","");
+    }
+    return $recId;
 }
 
+=head2 rowCount(table)
 
+Return the number of rows matching the given filter.
+
+=cut
+
+sub rowCount {
+    my $self = shift;
+    my $table = shift;
+    my $dbh = $self->dbh;
+    given($table){
+        when ('addr'){
+            return ($dbh->selectrow_array(<<SQL_END,{},$self->adminMode ? 1 : 0,$self->userId))[0];
+SELECT COUNT(*)
+  FROM addr
+  WHERE ? = 1 OR addr_id IN ( SELECT adus_addr FROM adus WHERE adus_user = ? )
+SQL_END
+        }
+        when ('user'){
+            return ($dbh->selectrow_array(<<SQL_END,{},$self->adminMode ? 1 : 0,$self->userId))[0];
+SELECT COUNT(*)
+  FROM user
+  WHERE ? = 1 OR user_id = ?
+SQL_END
+        }
+        when ('resv'){
+            return ($dbh->selectrow_array(<<SQL_END,{},$self->addrId))[0];
+SELECT COUNT(*)
+  FROM resv
+  JOIN adus ON ( resv_adus = adus_id )
+  WHERE adus_addr = ?
+SQL_END
+        }
+        when ('acct'){
+            return ($dbh->selectrow_array(<<SQL_END,{},$self->addrId))[0];
+SELECT COUNT(*)
+  FROM acct
+  WHERE acct_addr = ?
+SQL_END
+        }
+        default {
+            die mkError(3884,"Table '$table' is not valid");
+        }
+    }
+    return 0;
+}
+
+=head2 getRows(table,limit,offset,sort-col,desc?)
+
+Returns the chosen number of rows from the table.
+
+=cut
+
+sub getRows {
+    my $self = shift;
+    my $dbh = $self->dbh;
+    my $table = shift;
+    my $limit = shift;
+    my $offset = shift;
+    my $sortCol = shift;
+    my $desc = shift ? 'DESC' : 'ASC';
+    my $ORDER ='';
+    if ($sortCol){
+       $ORDER = 'ORDER BY '.$dbh->quota_identifier($sortCol).' '.$desc;
+    }
+    my $data;
+    given($table){
+        when ('addr'){
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->adminMode ? 1 : 0,$self->userId,$limit,$offset);
+SELECT *
+  FROM addr
+  WHERE ? = 1 OR addr_id IN ( SELECT adus_addr FROM adus WHERE adus_user = ? )
+  $ORDER
+  LIMIT ? OFFSET ?
+SQL_END
+            $self->_arrayExtraFilter('ADDRESS',$data);
+        }
+        when ('user'){
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->adminMode ? 1 : 0,$self->userId,$limit,$offset);
+SELECT *
+  FROM user
+  WHERE ? = 1 OR user_id = ?
+  $ORDER
+  LIMIT ? OFFSET ?
+SQL_END
+            $self->_arrayExtraFilter('USER',$data);
+        }
+        when ('resv'){
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
+SELECT resv_id, resv_room, resv_start,resv_len,resv_price,resv_subj,resv_extra,user_email
+  FROM resv
+  JOIN adus ON ( resv_adus = adus_id )
+  JOIN user ON ( adus_user = user_id )
+  WHERE resv_addr = ?
+  $ORDER
+  LIMIT ? OFFSET ?
+SQL_END
+            $self->_arrayExtraFilter('RESERVATION',$data);
+        }
+        when ('acct'){
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
+SELECT *
+  FROM acct
+  WHERE acct_addr = ?
+  $ORDER
+  LIMIT ? OFFSET ?
+SQL_END
+        }
+        default {
+            die mkError(4924,"Table '$table' is not valid");
+        }
+    }
+    return $data;    
+}
+    
 1;
 
 __END__

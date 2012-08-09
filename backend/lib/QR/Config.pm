@@ -169,7 +169,7 @@ ${E}head1 SYNOPSIS
     label => 'Horyzon Tarif',
     widget => 'checkBox',
     set => {
-        label => '+1 CHF pro Mietstunde zu gunsten von Horyzon',        
+        label => '+1 CHF pro Mietstunde zu Gunsten von Horyzon',        
     }
   },
   {
@@ -206,7 +206,10 @@ ${E}head1 SYNOPSIS
     set => {
         label => 'Gratis Miete erlauben',
     },
-    write => 'admin'
+    access => {
+        admin => 'write',
+        user => 'read',
+    }
   }
  ]
 
