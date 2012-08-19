@@ -3,7 +3,6 @@ use strict;
 use warnings;
 
 use QR::Exception qw(mkerror);
-use QR::Cache;
 
 use Mojo::Base -base;
 
@@ -32,6 +31,7 @@ our %allow = (
     getCalendarDay => 1,
     getConfig => 1,
     login => 1,
+    sendKey => 1,
     getEntry => 2,
     putEntry => 2,
     getRowCount => 2,
@@ -114,13 +114,14 @@ sub login {
     my $key = shift;
     my $data = shift;
     my $db = $self->database;
-    my $userId= $db->login($email,$key,$data);
-    if ($self->
+    my $userId = $db->login($email,$key,$data);
     $self->controller->session('userId',$userId);
     $db->userId($userId);
     $self->controller->session('adminMode', $self->config->cfg->{GENERAL}{admin}{$email});
-    my $user = $self->getEntry('user',$seuserId);
+    my $user = $self->getEntry('user',$userId);
     my $addrs = $self->getRows('addr',1000,0);  
+
+    # set the default address    
     if ($user->{user_addr}){
         for (@$addrs){
             if ($_->{addr_id} == $user->{user_addr}){
@@ -131,129 +132,55 @@ sub login {
     }
     else {
         $self->controller->session('addrId',$addrs->[0]{addr_id});
-    } 
+    }
+
     return {
         user => $user,
-        addrs => $addr
+        addrs => $addrs
     }
 }
 
-=head2 setAddress(addrId)
+=head2 setAddrId(addrId)
 
 Call the corresponding method in L<QR::Database> to select the billing address.
 
 =cut
 
-sub setAddress {
+sub setAddrId {
     my $self = shift;
-    return $self->database->setAddress(@_); 
+    my $addrId = $self->database->setAddrId(@_); 
+    $self->controller->session('addrId',$addrId);
 }
 
-=head2 getNodeCount(expression)
+=head2 getRowCount(table)
 
-Get the number of nodes matching filter.
+Get the number of table rows.
 
 =cut  
 
-sub getNodeCount {  ## no critic (RequireArgUnpacking)
+sub getRowCount {  ## no critic (RequireArgUnpacking)
     my $self = shift;
-    return $self->cache->getNodeCount(@_);
+    return $self->database->getRowCount(@_);
 }
 
-=head2 getNodes(expression,limit,offset)
+=head2 getRows(table,limit,offset,sortCol,sortDirection)
 
-Get the nodes matching the given filter.
+Get the rows.
 
 =cut  
 
-sub getNodes {   ## no critic (RequireArgUnpacking)
+sub getRows {   ## no critic (RequireArgUnpacking)
     my $self = shift;
-    return $self->cache->getNodes(@_);
+    return $self->database->getRows(@_);
 }
 
-=head2 getVisualizers(type,recordId)
-
-return a list of visualizers ready to visualize the given node.
-see L<QR::Visualizer::getVisualizers> for details.
-
-=cut
-
-sub getVisualizers {
-    my $self = shift;
-    my $type = shift;
-    my $recId = shift;
-    my $record = $self->cache->getNode($recId);
-    $self->visualizer->controller($self->controller);
-    return $self->visualizer->getVisualizers($type,$record);
-}
-
-=head2 visualize(instance,args)
-
-generic rpc call to be forwarere to the rpcService method of the visualizer instance.
-
-=cut
-
-sub visualize {   ## no critic (RequireArgUnpacking)
-    my $self = shift;
-    my $instance = shift;
-    $self->visualizer->controller($self->controller);
-    return $self->visualizer->visualize($instance,@_);
-}
-
-=head2 saveDash(config,label,id,update)
-
-Save the given dashboard properties. Returns the id associated. If the id is
-'null' a new id will be created. If the id is given, but the update time is
-different in the dash on file, then a new copy of the dash will be written
-to disk and appropriate information returned
-
-Returns:
-
- { id => x, up => y }
-
-=cut
-
-sub saveDash {
-    my $self = shift;
-    return $self->cache->saveDash(@_);
-}
-
-=head2 deleteDash(id,update)
-
-Remove the give Dashboard from the server if id AND updateTime match. Return
-1 on success.
-
-=cut
-
-sub deleteDash {
-    my $self = shift;
-    return $self->cache->deleteDash(@_);
-}
-
-=head2 getDashList(lastUpdate)
-
-Return a list of Dashboards on file, supplying detailed configuration data for those
-that changed since lastFetch (epoch time).
-
- [
-    { id => i1, up => x1, cfg => z1 }
-    { id => i2, up => x2, cfg => z2 }
-    { id => i3 }
- ]
-
-=cut
-
-sub getDashList {
-    my $self = shift;
-    return $self->cache->getDashList(@_);
-}        
 
 1;
 __END__
 
 =head1 COPYRIGHT
 
-Copyright (c) 2011 by OETIKER+PARTNER AG. All rights reserved.
+Copyright (c) 2012 by OETIKER+PARTNER AG. All rights reserved.
 
 =head1 LICENSE
 
@@ -277,7 +204,7 @@ S<Tobias Oetiker E<lt>tobi@oetiker.chE<gt>>
 
 =head1 HISTORY 
 
- 2011-01-25 to Initial
+ 2012-08-19 to Initial
 
 =cut
   

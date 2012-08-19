@@ -24,7 +24,7 @@ Configuration reader for Extopus
 use Carp;
 use Config::Grammar;
 use Mojo::Base -base;
-
+use Encode;
 use POSIX qw(strftime);
 
 =head2 ATTRIBUTES
@@ -43,7 +43,7 @@ pointing to the map with the data from the config file.
 
 =cut
 
-has 'config';
+has 'cfg';
 
 =head2 METHODS
 
@@ -75,6 +75,7 @@ sub reloadConfig {
     my $cfg = $parser->parse($self->file) or croak($parser->{err});
     for my $section (keys %$cfg){
         # list compiled code sections up
+        next unless ref $cfg->{$section} ~~ 'HASH';
         for my $key (keys %{$cfg->{$section}}){
             next unless $key =~ /_PL$/ and $cfg->{$section}{$key}{_text};
             $cfg->{$section}{$key} = $cfg->{$section}{$key}{_text};
@@ -85,8 +86,8 @@ sub reloadConfig {
             delete $cfg->{$section};
         }
     }
-    my ($header,$body) = split  /\r?\n\s*\r?\n/, $cfg->{MAIL}{KEYMAIL}{_text};
-    my @header = split /\r?\n(?=\S)/ $header;
+    my ($header,$body) = split /\r?\n\s*\r?\n/, $cfg->{MAIL}{KEYMAIL}{_text};
+    my @header = split /\r?\n(?=\S)/, $header;
     my %header;
     for (@header){
         s/^From:\s+//i && do {
@@ -101,18 +102,21 @@ sub reloadConfig {
             $header{cc} = $_;
             next;
         };
+        s/^To:\s+//i && do {
+            $header{to} = $_;
+            next;
+        };
         s/^Bcc:\s+//i && do {
             $header{bcc} = $_;
             next;
         };
-        die "ERROR: Invalid Mail (KEYMAIL) Header $_\n";
+        die "ERROR: Invalid KEYMAIL Header: $_\n";
     }
     $cfg->{MAIL}{KEYMAIL} = {
         header => \%header,
         body => $body
-    }
-    
-    return $self->cfg($cfg);
+    };    
+    $self->cfg($cfg);    
 }
 
 =head2 $x->B<make_config_pod>()
@@ -179,14 +183,16 @@ qroombo.cfg - The Qroombo configuration file
 ${E}head1 SYNOPSIS
 
  *** GENERAL ****
- admin = tobi@oetiker.ch,doris@oetiker.ch
+ admin = admin\@example.com cro\@example.com
  secret = very_secret_cookie_secret
  log_file = /tmp/qroombo.log
  log_level = debug
  database_dir = /tmp/qroombo
  title = Flörli Olten
- smtp_server = james.oetiker.ch
- admin = tobi@oetiker.ch,doris@oetiker.ch
+
+ *** MAIL ***
+ smtp_server = smtp.example.com
+ sender = resv\@example.com
 
  *** RESERVATION ***
  first_hour = 7
@@ -215,7 +221,7 @@ ${E}head1 SYNOPSIS
     { key => 'normal', title => 'Normaltarif' },     
  ];
  if (\$D{address}{allow_free}){
-      unshift @$ret, { key => 'free', title => 'Gratis Nutzung' };   
+      unshift \@\$ret, { key => 'free', title => 'Gratis Nutzung' };   
  }
 
  return {
@@ -297,9 +303,9 @@ sub _make_parser {
     my $E = '=';
 
     my $compileD = sub { 
-        my $code = $_[0];
+        my $code = $_[0] || '';
         # check and modify content in place
-        my $perl = 'sub { my %R = (%{$_[0]}); '.$code.'}';
+        my $perl = 'sub { my %D = (%{$_[0]}); '.$code.'}';
         my $sub = eval $perl; ## no critic (ProhibitStringyEval)
         if ($@){
             return "Failed to compile $code: $@ ";
@@ -309,12 +315,12 @@ sub _make_parser {
     };
 
     my $grammar = {
-        _sections => [ qw{GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ }],
-        _mandatory => [qw(GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ )],
+        _sections => [ qw{ GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ }],
+        _mandatory => [qw{ GENERAL MAIL RESERVATION USER ADDRESS ROOM }],
         GENERAL => {
             _doc => 'Global configuration settings for Qroomo',
-            _vars => [ qw(database_dir secret log_file log_level title smtp_server sender admin) ],
-            _mandatory => [ qw(databse_dir secret log_file sender admin) ],
+            _vars => [ qw(database_dir secret log_file log_level title admin) ],
+            _mandatory => [ qw(database_dir secret log_file admin) ],
             database_dir => { _doc => 'where to keep the qroombo database',
                 _sub => sub {
                     if ( not -d $_[0] ){
@@ -329,10 +335,10 @@ sub _make_parser {
             title => { _doc => 'tite to show in the top right corner of the app' },
             admin => { 
                 _doc => 'comma separated list of admin email addresses',
-                _sub => {
-                    $_[0] = { map { $_ => 1 } split /\s*,\s*/, $_[0] };
-                    undef;
-                }
+                _sub => sub {
+                    $_[0] = { map { $_ => 1 } split /\s+/, $_[0] };
+                    return undef;
+                },
                 _example => 'user@a.ch, user2@b.com'
             }
         },
@@ -347,7 +353,8 @@ sub _make_parser {
                 _doc => <<DOC_END,
 The mail to send to people login in. Example
 
-From: Qroombo <sender@address>
+From: Qroombo <sender\@address>
+To: {TO}
 Subject: your qroombo key
 
 You Qroombo key is {KEY}
@@ -359,7 +366,7 @@ DOC_END
             _doc => 'Frontend tuneing parameters',
             _vars => [ qw(first_hour last_hour) ],
             _mandatory => [ qw(first_hour last_hour) ],
-            _sections => [ qw(EXTRA_FIELDS_PL SELECTBOX_CFG_PL) ]
+            _sections => [ qw(EXTRA_FIELDS_PL SELECTBOX_CFG_PL) ],
             first_hour => { _doc => 'from which time in the morning should RESERVATION be pssible' },
             last_hour  => { _doc => 'which is the last hour to reserve (23 means until midnight)' },
             EXTRA_FIELDS_PL => {
@@ -376,7 +383,7 @@ DOC_END
             },
         },
         USER => {
-            _sections => [ qw(EXTRA_FIELDS_PL) ]
+            _sections => [ qw(EXTRA_FIELDS_PL) ],
             EXTRA_FIELDS_PL => {
                 _doc => 'Extra information to be store together with information on people using the system. Perl expression must return array pointer in AutoForm syntax.',
                 _text => {
@@ -385,7 +392,7 @@ DOC_END
             },
         },
         ADDRESS => {
-            _sections => [ qw(EXTRA_FIELDS_PL) ]
+            _sections => [ qw(EXTRA_FIELDS_PL) ],
             EXTRA_FIELDS_PL => {
                 _doc => 'Extra information to stored with invoice addresses. Perl expression must return array pointer in AutoForm syntax.',
                 _text => {
@@ -395,7 +402,7 @@ DOC_END
         },
 
         ROOM => {
-            _sections => [ qw(PRICE_PL) ]
+            _sections => [ qw(PRICE_PL) ],
             _mandatory => [ qw(PRICE_PL) ],
             PRICE_PL => {
                 _doc => 'Perl function to calculat the room price. The %D hash contains information about address, reservation.',
@@ -421,7 +428,9 @@ DOC_END
             },
             DATA_PL => {
                 _doc => 'A Perl expression to return data available to PRICE_PL via $D{room}',
-                _sub => $compileD,
+                _text => {
+                    _sub => $compileD,
+                }
             },
         },
     };

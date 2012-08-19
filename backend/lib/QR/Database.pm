@@ -212,7 +212,7 @@ sub sendKey {
     my $self = shift;   
     my $email = lc shift;
     my $cfg = $self->config->cfg;
-    die mkError(18473,"expected an email adddress")
+    die mkerror(18473,"expected an email adddress")
        if $email !~ m/^[^\s\@]+\@[^\s\@]+$/;
     my $key = $self->_mkKey($email); 
     my $sender = new Mail::Sender({
@@ -227,7 +227,12 @@ sub sendKey {
         ctype => 'text/plain',
     });
     my $body = $cfg->{MAIL}{KEYMAIL}{body};
-    $body =~ s/{KEY}/$key/;
+    my %map = {
+        KEY => $key,
+        TO => $email
+    };
+    my $pattern = join '|', keys %map;
+    $body =~ s/{($pattern)}/$map{$1}/g;
     $sender->Open(\%headers);
     $sender->SendEnc($body);
     $sender->Close();
@@ -249,7 +254,7 @@ sub login {
     my $userKey = shift;
     my $data = shift;
     my $realKey = $self->_mkKey($email);
-    die mkError(3984,"not a valid key provided") unless $userKey ~~ $realKey;
+    die mkerror(3984,"not a valid key provided") unless $userKey ~~ $realKey;
     my $userRaw = $self->_getRawEntry('user','user_email',$email);
     my $userId =  $userRaw->{user_id};
     if (not $userId){
@@ -273,6 +278,31 @@ sub login {
     }
 
     return $userId;
+}
+
+=head2 setAddrId(id)
+
+Activate the given address id for the user
+
+=cut
+
+sub setAddrId {
+    my $self = shift;
+    my $addrId = shift;
+    if (not $self->adminMode){
+        my $row = $dbh->selectrow_hashref(<<SQL_END,{},$self->userId,$addrId);
+SELECT addr_id
+  FROM addr
+  JOIN adus ON addr_id = adus_addr
+ WHERE adus_user = ? AND addr_id = ?
+SQL_END
+        mkerror(9384,"No permission to set AddressId $addrId")
+            if not $row->{addr_id} ~~ $addrId;            
+    }
+    $self->putEntry('user',$self->userId,{
+        user_addr => $addrId
+    });
+    return $addrId;
 }
 
 =head2 getCalendarDay(date)
@@ -445,7 +475,7 @@ SQL_END
             }
         }
     }
-    die mkError(39934,'Record acccess permission denied');
+    die mkerror(39934,'Record acccess permission denied');
 }
 
 =head2 putEntry(table,id,rec)
@@ -467,12 +497,12 @@ sub putEntry {
     given ($table) {
         when ('addr'){                       
             $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
-            die mkError(95334,"No premission to edit address record")
+            die mkerror(95334,"No premission to edit address record")
                 unless $adus->{adus_id} or not $recId or $self->adminMode;
             $extra = $self->_extraFilter('ADDRESS',$rec,'write');
         }
         when ('user'){
-            die mkError(38344,"No permission to edit user details")
+            die mkerror(38344,"No permission to edit user details")
                 unless not $recId or $recId ~~ $self->userId or  $self->adminMode;
             $extra = $self->_extraFilter('USRE',$rec,'write');
         }
@@ -491,15 +521,15 @@ sub putEntry {
             $extra = $self->_extraFilter('RESERVATION',$rec,'write');
         }
         when ('acct'){
-            die mkError(8744,"Only admin can enter booking records") unless $self->adminMode;
+            die mkerror(8744,"Only admin can enter booking records") unless $self->adminMode;
         }
         when ('adus'){
             my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
-            die mkError(8344,"No permissions to edit adus table") 
+            die mkerror(8344,"No permissions to edit adus table") 
                 unless $self->adminMode or $adus->{adus_admin};
         }
         default {
-            die mkError(3945,"Table $table not open for edit");
+            die mkerror(3945,"Table $table not open for edit");
         }
     }
     my $tableQ = $dbh->quote_identifier($table);          
@@ -579,7 +609,7 @@ SELECT COUNT(*)
 SQL_END
         }
         default {
-            die mkError(3884,"Table '$table' is not valid");
+            die mkerror(3884,"Table '$table' is not valid");
         }
     }
     return 0;
@@ -647,7 +677,7 @@ SELECT *
 SQL_END
         }
         default {
-            die mkError(4924,"Table '$table' is not valid");
+            die mkerror(4924,"Table '$table' is not valid");
         }
     }
     return $data;    

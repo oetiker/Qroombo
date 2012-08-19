@@ -25,44 +25,30 @@ arrive.
 use strict;
 use warnings;
 
-# load the two modules to have perl check them
-use MojoX::Dispatcher::Qooxdoo::Jsonrpc;
 use Mojolicious::Plugin::QooxdooJsonrpc;
 use Mojo::URL;
 use Mojo::Util qw(hmac_sha1_sum slurp);
 
 use QR::RpcService;
-use QR:Config;
+use QR::Config;
 use QR::DocPlugin;
 
 use Mojo::Base 'Mojolicious';
 
-=head2 cfg
+=head2 config
 
-A hash pointer to the parsed qroombo configuraton file. See L<QR::Cfg> for syntax.
-The default configuration file is located in etc/qroombo.cfg. You can override the
-path by setting the C<QROOMBO_CONF> environment variable.
-
-The cfg property is set automatically on startup.
+A pointer the the L<QR::Config> object.
 
 =cut
 
-has 'cfg_file' => sub { $ENV{QROOMBO_CONF} || $_[0]->home->rel_file('etc/qroombo.cfg' ) };
+has 'config_file' => sub { $ENV{QROOMBO_CONF} || $_[0]->home->rel_file('etc/qroombo.cfg' ) };
 
-has 'cfg' => sub {
+has 'config' => sub {
     my $self = shift;
     QR::Config->new(
-        file => $self->cfg_file
+        file => $self->config_file
     );
 };
-
-=head2 prefix
-
-location of the qroombo application.
-
-=cut
-
-has 'prefix' => '/';
 
 =head1 METHODS
 
@@ -79,11 +65,14 @@ Mojolicious calls the startup method at initialization time.
 sub startup {
     my $self = shift;
     my $me = $self;
-    my $gcfg = $self->cfg->{GENERAL};
-    $self->secret($gcfg->{mojo_secret});
-    if ($self->mode ne 'development'){
+    my $gcfg = $self->config->cfg->{GENERAL};
+    $self->secret($gcfg->{secret});
+    if ($self->mode eq 'development'){
+        $self->log->path(undef);    
+    }
+    else {      
         $self->log->path($gcfg->{log_file});
-        if ($gcfg->{log_level}){    
+        if (not $ENV{MOJO_LOG_LEVEL} and $gcfg->{log_level}){
             $self->log->level($gcfg->{log_level});
         }
     }
@@ -96,16 +85,11 @@ sub startup {
         $self->req->url->base(Mojo::URL->new($uri)) if $uri;
     });
     
-    my $service = QR::RpcService->new(
-        cfg => $self->cfg,
-        log => $self->log
-    );
-
-    # session is valid for 1 day
+    # session is valid for 1 month
     $self->sessions->default_expiration(30*24*3600);
 
     # prevent our cookie from colliding
-    $self->sessions->cookie_name('QR_'.hmac_sha1_sum(slurp($self->cfg_file)));
+    $self->sessions->cookie_name('QR_'.hmac_sha1_sum(slurp($self->config_file)));
 
     my $routes = $self->routes;
 
@@ -126,19 +110,22 @@ sub startup {
         });
     }
 
-    $routes->get('/' => sub { shift->redirect_to($me->prefix.'/')});
-
     $self->plugin('QR::DocPlugin', {
         root => '/doc',
         index => 'QR::Index',
-        localguide => $self->cfg->{GENERAL}{localguide},
+        localguide => $gcfg->{localguide},
         template => Mojo::Asset::File->new(
             path=>$self->home->rel_file('templates/doc.html.ep')
         )->slurp,
     }); 
 
+    my $service = QR::RpcService->new(
+        config => $self->config,
+        log => $self->log
+    );
+
     $self->plugin('qooxdoo_jsonrpc',{
-        prefix => $self->prefix,
+        prefix => '/',
         services => {
             QR => $service
         }

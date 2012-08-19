@@ -1,4 +1,4 @@
-package EP::DocPlugin;
+package QR::DocPlugin;
 use strict;  
 use warnings;
 
@@ -13,7 +13,7 @@ use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
 use Mojo::Util 'url_escape';
-use EP::Config;
+use QR::Config;
 use Pod::Simple::HTML;
 use Pod::Simple::Search;
 
