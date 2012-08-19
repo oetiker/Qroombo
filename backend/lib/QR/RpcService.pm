@@ -29,31 +29,33 @@ is this method accessible?
 =cut
 
 our %allow = (
+    getCalendarDay => 1,
     getConfig => 1,
-    getBranch => 1,
-    getNodeCount => 1,
-    getNodes => 1,
-    getNode => 1,
-    getVisualizers => 1,
-    visualize => 1,
-    saveDash => 1,
-    getDashList => 1,
-    deleteDash => 1,
+    login => 1,
+    getEntry => 2,
+    putEntry => 2,
+    getRowCount => 2,
+    getRows => 2,
 );
 
 has 'controller';
 
-has 'cfg';
-has 'visualizer';
-has 'cache';
+has 'config';
+has 'database';
 has 'log';
 
 sub allow_rpc_access {
     my $self = shift;
-    my $method = shift;
-    my $user = $self->controller->session('epUser');
-    die mkerror(3993,q{Your session has expired. Please re-connect.}) unless defined $user;
-    $self->cache($self->controller->stash('epCache'));
+    my $method = shift;    
+    my $userId = $self->controller->session('userId');
+    my $addrId = $self->controller->session('addrId');
+    my $adminMode = $self->controller->session('adminMode');
+    $self->database->userId($userId);
+    $self->database->addrId($addrId);
+    $self->database->adminMode($adminMode);
+    if ($allow{$method} ~~ 2 and not ( $userId and $addrId )){
+        die mkerror(3993,q{authentication required});
+    }
     return $allow{$method}; 
 }
    
@@ -66,45 +68,85 @@ get some gloabal configuration information into the interface
 
 sub getConfig {
     my $self = shift;
+    my $cfg = $self->config->cfg;
     return {
-        treeCols => $self->getTableColumnDef('tree'),
-        searchCols => $self->getTableColumnDef('search'),
-        frontend => $self->cfg->{FRONTEND},
+        RESERVATION => $cfg->{RESERVATION},
+        USER => $cfg->{USER},
+        ADDRESS => $cfg->{ADDRESS},
+        ROOM => $cfg->{ROOM},
+        GENERAL => {
+            title => $cfg->{GENERAL}{title}
+        }
     }
 }
 
-=head2 getTreeBranch(parent)
+=head2 getCalendarDay(date)
 
-Get the branches and leaves attachd to the given parent. The root of the tree has the parent id 0.
+Call corresponding method in L<QR::Database> to get calendar info on the given day.
 
 =cut  
 
-sub getBranch { ## no critic (RequireArgUnpacking)
+sub getCalenarDay {
     my $self = shift;    
-    return $self->cache->getBranch(@_); 
+    return $self->database->getCalendarDay(@_); 
 }
 
-=head2 getTableColumnDef
+=head2 login(email,key)
 
-Return table column definitions.
+Call corresponding method in L<QR::Database> to login.
 
 =cut
 
-sub getTableColumnDef {
+sub sendKey {
+    my $self = shift;    
+    return $self->database->sendKey(@_); 
+}
+
+=head2 login(email,key,data)
+
+Call corresponding method in L<QR::Database> to login.
+
+=cut
+
+sub login {
     my $self = shift;
-    my $table = shift;
-    my $cfg = $self->cfg->{TABLES};
-    my $cols = $cfg->{$table};
-    die mkerror(34884,"Table type '$table' is not known!") unless defined $cols;
-    my $attr = $self->cfg->{ATTRIBUTES};
+    my $email = shift;
+    my $key = shift;
+    my $data = shift;
+    my $db = $self->database;
+    my $userId= $db->login($email,$key,$data);
+    if ($self->
+    $self->controller->session('userId',$userId);
+    $db->userId($userId);
+    $self->controller->session('adminMode', $self->config->cfg->{GENERAL}{admin}{$email});
+    my $user = $self->getEntry('user',$seuserId);
+    my $addrs = $self->getRows('addr',1000,0);  
+    if ($user->{user_addr}){
+        for (@$addrs){
+            if ($_->{addr_id} == $user->{user_addr}){
+                $self->controller->session('addrId',$_->{addr_id});
+                last;
+            }
+        }
+    }
+    else {
+        $self->controller->session('addrId',$addrs->[0]{addr_id});
+    } 
     return {
-        ids => ['__nodeId', @$cols],
-        names => [ 'NodeId', map { $attr->{$_} } @$cols ],
-        ref $cfg->{"${table}_width"} ? (
-            widths  => [1,@{$cfg->{${table}."_width"}}]
-        ) : (),
-        props => ref $cfg->{"${table}_props"} ? ['H',@{$cfg->{${table}."_props"}}] : [],
-    };
+        user => $user,
+        addrs => $addr
+    }
+}
+
+=head2 setAddress(addrId)
+
+Call the corresponding method in L<QR::Database> to select the billing address.
+
+=cut
+
+sub setAddress {
+    my $self = shift;
+    return $self->database->setAddress(@_); 
 }
 
 =head2 getNodeCount(expression)

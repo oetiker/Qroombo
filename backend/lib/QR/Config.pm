@@ -85,6 +85,33 @@ sub reloadConfig {
             delete $cfg->{$section};
         }
     }
+    my ($header,$body) = split  /\r?\n\s*\r?\n/, $cfg->{MAIL}{KEYMAIL}{_text};
+    my @header = split /\r?\n(?=\S)/ $header;
+    my %header;
+    for (@header){
+        s/^From:\s+//i && do {
+            $header{fake_from} = $_;
+            next;
+        };
+        s/^Subject:\s+//i && do {
+            $header{subject} = encode('MIME-Header',$_);
+            next;
+        };
+        s/^Cc:\s+//i && do {
+            $header{cc} = $_;
+            next;
+        };
+        s/^Bcc:\s+//i && do {
+            $header{bcc} = $_;
+            next;
+        };
+        die "ERROR: Invalid Mail (KEYMAIL) Header $_\n";
+    }
+    $cfg->{MAIL}{KEYMAIL} = {
+        header => \%header,
+        body => $body
+    }
+    
     return $self->cfg($cfg);
 }
 
@@ -153,11 +180,14 @@ ${E}head1 SYNOPSIS
 
  *** GENERAL ****
  admin = tobi@oetiker.ch,doris@oetiker.ch
- mojo_secret = very_secret_cookie_secret
+ secret = very_secret_cookie_secret
  log_file = /tmp/qroombo.log
  log_level = debug
  database_dir = /tmp/qroombo
  title = Flörli Olten
+ smtp_server = james.oetiker.ch
+ admin = tobi@oetiker.ch,doris@oetiker.ch
+
  *** RESERVATION ***
  first_hour = 7
  last_hour = 23
@@ -279,12 +309,12 @@ sub _make_parser {
     };
 
     my $grammar = {
-        _sections => [ qw{GENERAL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ }],
-        _mandatory => [qw(GENERAL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ )],
+        _sections => [ qw{GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ }],
+        _mandatory => [qw(GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ )],
         GENERAL => {
             _doc => 'Global configuration settings for Qroomo',
-            _vars => [ qw(database_dir mojo_secret log_file log_level title) ],
-            _mandatory => [ qw(databse_dir mojo_secret log_file) ],
+            _vars => [ qw(database_dir secret log_file log_level title smtp_server sender admin) ],
+            _mandatory => [ qw(databse_dir secret log_file sender admin) ],
             database_dir => { _doc => 'where to keep the qroombo database',
                 _sub => sub {
                     if ( not -d $_[0] ){
@@ -293,10 +323,37 @@ sub _make_parser {
                     -d $_[0] ? undef : "Database directory $_[0] does not exist (and could not be created)";
                 }
             },
-            mojo_secret => { _doc => 'secret for signing mojo cookies' },
+            secret => { _doc => 'secret for signing mojo cookies' },
             log_file => { _doc => 'write a log file to this location (unless in development mode)'},
             log_level => { _doc => 'what to write to the logfile'},
             title => { _doc => 'tite to show in the top right corner of the app' },
+            admin => { 
+                _doc => 'comma separated list of admin email addresses',
+                _sub => {
+                    $_[0] = { map { $_ => 1 } split /\s*,\s*/, $_[0] };
+                    undef;
+                }
+                _example => 'user@a.ch, user2@b.com'
+            }
+        },
+        MAIL => {
+            _doc => 'Mail configuration',
+            _vars => [ qw(smtp_server sender) ],
+            _sections => [ qw(KEYMAIL) ],
+            _mandatory => [ qw(sender KEYMAIL) ],
+            sender => { _doc => 'sender address for Qroom eMails' },
+            smtp_server => { _doc => 'smtp server adddress', _default=>'localhost' },
+            KEYMAIL => {
+                _doc => <<DOC_END,
+The mail to send to people login in. Example
+
+From: Qroombo <sender@address>
+Subject: your qroombo key
+
+You Qroombo key is {KEY}
+DOC_END
+                _text => {}
+            }
         },
         RESERVATION => {
             _doc => 'Frontend tuneing parameters',

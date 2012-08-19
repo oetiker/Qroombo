@@ -1,8 +1,10 @@
-<package QR::Database;
+package QR::Database;
 use strict;
 use warnings;
 use Data::Dumper;
 use Time::Local;
+use Encode;
+use Mail::Sender;
 
 =head1 NAME
 
@@ -126,15 +128,17 @@ sub _ensureTables {
         user => <<SQL_END,
 user_id     INTEGER PRIMARY KEY AUTOINCREMENT,
 user_email  TEXT NOT NULL UNIQUE,
-user_first  TEXT,
-user_last   TEXT,
+user_first  TEXT NOT NULL,
+user_last   TEXT NOT NULL,
 user_phone1 TEXT,
 user_phone2 TEXT,
-user_extra  TEXT
+user_extra  TEXT,
+user_addr   INTEGER
 SQL_END
         addr => <<SQL_END,
 addr_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-addr_name   TEXT NOT NULL,
+addr_first  TEXT NOT NULL,
+addr_last   TEXT NOT NULL,
 addr_org    TEXT,
 addr_addr1  TEXT NOT NULL,
 addr_addr2  TEXT,
@@ -189,6 +193,88 @@ sub new {
     return $self;
 }
 
+=head2 sendKey(email)
+
+send a authentication key to the given email address
+
+=cut
+
+sub _mkKey {
+    my $self = shift;
+    my $text = lc shift;
+    my $time = int( time / 3600 / 24); 
+    my $dg = Digest->new('MD5');
+    $dg->add($time,$email,$self->config->cfg->{GENERAL}{secret});
+    return sprintf('%s',lc(substr($dg->hexdigest,1,6)));
+}
+
+sub sendKey {
+    my $self = shift;   
+    my $email = lc shift;
+    my $cfg = $self->config->cfg;
+    die mkError(18473,"expected an email adddress")
+       if $email !~ m/^[^\s\@]+\@[^\s\@]+$/;
+    my $key = $self->_mkKey($email); 
+    my $sender = new Mail::Sender({
+        smtp => $cfg->{MAIL}{smtp_server},
+        from => $cfg->{MAIL}{sender},
+        on_errors => 'die' 
+    });
+    $sender->Open({
+        to => $email,
+        charset => 'UTF-8',
+        encoding => 'Quoted-printable',
+        ctype => 'text/plain',
+    });
+    my $body = $cfg->{MAIL}{KEYMAIL}{body};
+    $body =~ s/{KEY}/$key/;
+    $sender->Open(\%headers);
+    $sender->SendEnc($body);
+    $sender->Close();
+    my $user = $self->_getRawEntry('user','user_email',$email);
+    return { userId => $user->{user_id} }
+}
+
+
+=head2 login(email,key,userData)
+
+login the user, if he provides an email and a key
+new users must provide additional information.
+
+=cut
+
+sub login {
+    my $self = shift;
+    my $email = lc shift;
+    my $userKey = shift;
+    my $data = shift;
+    my $realKey = $self->_mkKey($email);
+    die mkError(3984,"not a valid key provided") unless $userKey ~~ $realKey;
+    my $userRaw = $self->_getRawEntry('user','user_email',$email);
+    my $userId =  $userRaw->{user_id};
+    if (not $userId){
+        $userId = $self->putEntry('user',undef,{
+            user_email => $email,
+            map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
+                qw(user_first user_last user_phone1 user_phone2)
+        });
+        $data->{addr_first} = $data->{user_first},
+        $data->{addr_last} = $data->{user_last},
+        my $addrId = $self->putEntry('addr',undef,{
+            map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
+                qw(addr_first addr_last addr_org addr_addr1 addr_addr2 addr_zip addr_town addr_cntry)
+        });
+        $adusId = $self->putEntry('adus',undef,{
+            adus_addr => $addrId,
+            adus_user => $persId,
+            adus_admin => 1
+        });
+                
+    }
+
+    return $userId;
+}
+
 =head2 getCalendarDay(date)
 
 Returns the list of reservations for the given day (UTC). The date is to be given in unix epoch seconds.
@@ -199,7 +285,7 @@ sub getCalendarDay {
     my $self = shift;
     my $date = strftime('%Y-%m-%d',gmtime(shift));
     my $dbh = $self->dbh;
-    my $resArray = $dbh->selecall_arrayref(<<SQL_END,{ Slice => {}},$date);
+    my $resArray = $dbh->selectall_arrayref(<<SQL_END,{ Slice => {}},$date);
 SELECT resv_id,
        resv_room,
        date(resv_start,'utc') AS date,
@@ -238,15 +324,21 @@ will fail.
 =cut
 
 # just return the data without any checks
-sub _getRawEntry {
+sub _getRawRows {
     my $self = shift;
     my $tableIn = shift;
-    my $fieldIn = shift;
+    my $columnIn = shift;
+    my $value = shift;
     my $table = $dhb->quote_identifier($tableIn);
-    my $recField = $dhb->quote_identifier($field);
-    my $recId = shift;
+    my $column = $dhb->quote_identifier($columnIn);
     my $dbh = $self->dbh;
-    return $dbh->selectrow_hashref("SELECT * FROM $table WHERE $recField = ?",{},$recId);
+    return $dbh->selectall_arrayref("SELECT * FROM $table WHERE $column = ?",{Slice=>{}},$value);
+}
+
+# just return the data without any checks
+sub _getRawEntry {
+    my $self = shift;
+    return ($self->_getRawRows(@_))[0];
 }
 
 # remove extra fields from data hash and return a extra hash containing those
@@ -446,13 +538,13 @@ SQL_END
     return $recId;
 }
 
-=head2 rowCount(table)
+=head2 getRowCount(table)
 
 Return the number of rows matching the given filter.
 
 =cut
 
-sub rowCount {
+sub getRowCount {
     my $self = shift;
     my $table = shift;
     my $dbh = $self->dbh;
