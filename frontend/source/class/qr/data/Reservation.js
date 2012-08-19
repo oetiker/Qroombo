@@ -12,8 +12,9 @@
 
 qx.Class.define('qr.data.Reservation', {
     extend : qx.core.Object,
-    construct: function(){
+    construct: function(set){
         this.base(arguments);
+        this.set(set);
         this._cfg = qr.data.Config.getInstance();
     },
     properties : {
@@ -36,7 +37,11 @@ qx.Class.define('qr.data.Reservation', {
         /**
          * if this reservation is stored on the server, a Reservation id 
          */
-        reservationId: {},        
+        resvId: {},
+        /**
+         * the subject of the reservation
+         */
+        subject: {},        
         /**
          * can this reservation be edited?
          */

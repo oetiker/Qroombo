@@ -50,22 +50,6 @@ qx.Class.define("qr.Application", {
                 bottom : 10,
                 right  : 10
             });
-
-            var booker = qr.ui.Booker.getInstance();
-            booker.addReservation(new qr.data.Reservation().set({
-                roomId: 'salon',
-                startHr: 9,
-                duration: 3,
-                editable: true,
-                reservationId: 393
-            }));
-            booker.addReservation(new qr.data.Reservation().set({
-                roomId: 'flora',
-                startHr: 11,
-                duration: 3,
-                editable: false,
-                reservationId: 3983
-            }));
         }
     }
 });

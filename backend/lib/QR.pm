@@ -125,9 +125,9 @@ sub startup {
     );
 
     $self->plugin('qooxdoo_jsonrpc',{
-        prefix => '/',
+        prefix => '',
         services => {
-            QR => $service
+            qr => $service
         }
     }); 
     return 0;

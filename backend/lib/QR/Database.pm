@@ -15,8 +15,7 @@ QR::Database - qroombo database
  use QR::Database;
 
  my $db = QR::Database->new(
-        user => $user,
-        cfg => $cfg
+        config => $cfg
  );
 
  $db->user('tobi@oetiker.ch');
@@ -33,6 +32,7 @@ use Carp;
 use DBI;
 use Encode;
 use QR::Exception qw(mkerror);
+use POSIX qw(strftime);
 
 my %tableNames = ( user =>1, addr=>1, adus=>1, resv=>1, acct=>1);
 
@@ -49,7 +49,7 @@ no user is set.
 
 =cut
 
-has userId => undef;
+has 'userId';
 
 =head3 addrId
 
@@ -57,7 +57,7 @@ the current billing address.
 
 =cut
 
-has addrId => undef;
+has 'addrId';
 
 =head3 adminMode;
 
@@ -73,7 +73,7 @@ points to the config hash
 
 =cut
 
-has cfg  => sub { croak "The configuration object is required" };
+has config  => sub { croak "The configuration object is required" };
 
 =head3 dbh
 
@@ -93,10 +93,6 @@ Create an QR::Database object.
 
 =over
 
-=item B<user>
-
-Who is talking to the database. Some functions require the user to be set.
-
 =item B<cfg>
 
 A hash pointer to the configuration as read by L<QR::Config>.
@@ -108,7 +104,7 @@ A hash pointer to the configuration as read by L<QR::Config>.
 # connect to the database
 sub _connect {
     my $self = shift;
-    my $path = $self->cfg->config->{GENERAL}{database_dir}.'/qroombo.sqlite';
+    my $path = $self->config->cfg->{GENERAL}{database_dir}.'/qroombo.sqlite';
     # $self->log->debug("connecting to sqlite cache $path");
     my $dbh = DBI->connect_cached("dbi:SQLite:dbname=$path","","",{
          RaiseError => 1,
@@ -204,7 +200,7 @@ sub _mkKey {
     my $text = lc shift;
     my $time = int( time / 3600 / 24); 
     my $dg = Digest->new('MD5');
-    $dg->add($time,$email,$self->config->cfg->{GENERAL}{secret});
+    $dg->add($time,$text,$self->config->cfg->{GENERAL}{secret});
     return sprintf('%s',lc(substr($dg->hexdigest,1,6)));
 }
 
@@ -233,7 +229,9 @@ sub sendKey {
     };
     my $pattern = join '|', keys %map;
     $body =~ s/{($pattern)}/$map{$1}/g;
-    $sender->Open(\%headers);
+    my $header = $cfg->{MAIL}{KEYMAIL}{header};
+    $header->{to} = $email;
+    $sender->Open($header);
     $sender->SendEnc($body);
     $sender->Close();
     my $user = $self->_getRawEntry('user','user_email',$email);
@@ -269,9 +267,9 @@ sub login {
             map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
                 qw(addr_first addr_last addr_org addr_addr1 addr_addr2 addr_zip addr_town addr_cntry)
         });
-        $adusId = $self->putEntry('adus',undef,{
+        $self->putEntry('adus',undef,{
             adus_addr => $addrId,
-            adus_user => $persId,
+            adus_user => $userId,
             adus_admin => 1
         });
                 
@@ -290,7 +288,7 @@ sub setAddrId {
     my $self = shift;
     my $addrId = shift;
     if (not $self->adminMode){
-        my $row = $dbh->selectrow_hashref(<<SQL_END,{},$self->userId,$addrId);
+        my $row = $self->dbh->selectrow_hashref(<<SQL_END,{},$self->userId,$addrId);
 SELECT addr_id
   FROM addr
   JOIN adus ON addr_id = adus_addr
@@ -323,10 +321,9 @@ SELECT resv_id,
        resv_len,
        resv_pub,
        resv_subj,
-       adus_addr,
-       user_email
+       adus_addr
   FROM resv 
-  JOIN adus ON (resv_adus = adus_id) 
+  JOIN adus ON (resv_adus = adus_id)  
   WHERE date(resv_start,'utc') = ?
 SQL_END
     my @ret;
@@ -334,11 +331,12 @@ SQL_END
     for my $res (@$resArray){
         my $mine = $res->{adus_addr} ~~ $addrId;
         push @ret, {
-            room => $res->{resv_room},
-            date => $res->{date},
-            start => $res->{start},
+            resvId => $res->{resv_id},
+            roomId => $res->{resv_room},
+            startDate => $res->{date},
+            startHr => $res->{start},
             duration => $res->{resv_len},
-            subj => $res->{resv_pub} or $mine ? $res->{resv_subj},
+            subject => ( $res->{resv_pub} or $mine ) ? $res->{resv_subj} : undef,
             editable => $mine
         }
     }
@@ -359,9 +357,9 @@ sub _getRawRows {
     my $tableIn = shift;
     my $columnIn = shift;
     my $value = shift;
-    my $table = $dhb->quote_identifier($tableIn);
-    my $column = $dhb->quote_identifier($columnIn);
     my $dbh = $self->dbh;
+    my $table = $dbh->quote_identifier($tableIn);
+    my $column = $dbh->quote_identifier($columnIn);
     return $dbh->selectall_arrayref("SELECT * FROM $table WHERE $column = ?",{Slice=>{}},$value);
 }
 
@@ -378,7 +376,7 @@ sub _extraFilter {
     my $section = shift;
     my $data = shift;
     my $mode = shift // 'read';
-    my $cfg = $self->cfg->config->{$section};
+    my $cfg = $self->config->cfg->{$section};
     my %ret;
     if ($cfg->{EXTRA_FIELDS_PL}){
         my $extraFields = $cfg->{EXTRA_FIELDS_PL}();
@@ -415,15 +413,15 @@ sub getEntry {
     my $table = shift;
     my $recId = shift;
     my $dbh = $self->dbh;
-    my $rec = $self->_getRawEntry($table,$table.'_id',$recid);   
+    my $rec = $self->_getRawEntry($table,$table.'_id',$recId);   
     my $extra = {};
     if ($rec->{$table.'_extra'}){
         $extra = $self->json->decode($rec->{$table.'_extra'});        
-        delete $rec->{$table.'_extra'}};
+        delete $rec->{$table.'_extra'};
     }
-    my $cfg = $self->cfg->config;
-    given($table){
-        when ('addr'){
+    my $cfg= $self->config->cfg;
+    given ( $table ) {
+        when ('addr') {
             my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$recId,$self->userId); 
             if ($self->adminMode or $adus->{adus_id}){
                 my $users = $dbh->selectcol_arrayref(<<SQL_END,{Columns=>[1,2,3]},$recId);
@@ -432,7 +430,7 @@ SELECT user_email,adus_id,adus_admin
   JOIN user ON ( adus_user = user_id )
  WHERE adus_addr = ?
 SQL_END
-                $extra = $self->_extraFilter('ADDRESS',$extra)
+                $extra = $self->_extraFilter('ADDRESS',$extra);
                 return {
                     %$extra,                    
                     %$rec,
@@ -449,7 +447,7 @@ SQL_END
         }
         when ('user'){
             if ($self->adminMode or $recId eq $self->userId){
-                $extra = $self->_extraFilter('USER',$extra)
+                $extra = $self->_extraFilter('USER',$extra);
                 return { %$extra, %$rec};
             }
         }
@@ -458,7 +456,7 @@ SQL_END
             if ( $self->adminMode 
                 or $adus->{adus_user} ~~ $self->userId 
                 or $adus->{adus_addr} ~~ $self->addrId ){
-                $extra = $self->_extraFilter('RESERVATION',$extra)
+                $extra = $self->_extraFilter('RESERVATION',$extra);
                 return { %$extra, %$rec};
             }
         }
@@ -491,12 +489,13 @@ sub putEntry {
     my $table = shift;
     my $recId = shift;
     my $rec = shift;
+    my $dbh = $self->dbh;
     # can't change or set the id of a record
     delete $rec->{$table.'_id'};
     my $extra;
     given ($table) {
         when ('addr'){                       
-            $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkerror(95334,"No premission to edit address record")
                 unless $adus->{adus_id} or not $recId or $self->adminMode;
             $extra = $self->_extraFilter('ADDRESS',$rec,'write');
@@ -556,7 +555,6 @@ SQL_END
         my $keys = join ", ", map {
             $dbh->quote_identifier($_)
         } @keys;
-        if (
         my $placeholders = join ", ", map { '?' } @keys;
         my @values = map { $rec->{$_} } @keys;
             
@@ -628,7 +626,7 @@ sub getRows {
     my $limit = shift;
     my $offset = shift;
     my $sortCol = shift;
-    my $desc = shift ? 'DESC' : 'ASC';
+    my $desc = (shift) ? 'DESC' : 'ASC';
     my $ORDER ='';
     if ($sortCol){
        $ORDER = 'ORDER BY '.$dbh->quota_identifier($sortCol).' '.$desc;

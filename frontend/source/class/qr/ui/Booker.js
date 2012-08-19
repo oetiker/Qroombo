@@ -121,7 +121,7 @@ qx.Class.define("qr.ui.Booker", {
                     });  
                 }
             }
-            this._reservationMap[reservation.getReservationId()] = marker;
+            this._reservationMap[reservation.getResvId()] = marker;
             marker.setUserData('reservation',reservation);
             marker.setLabel(String(reservation.getStartHr())+' - '+String(reservation.getDuration()+reservation.getStartHr()));
             return marker;
@@ -294,8 +294,17 @@ qx.Class.define("qr.ui.Booker", {
             });
     	    return {col:col+1,row:row+1};
         },
-        _applyDate: function(oldDate,newDate){
+        _applyDate: function(newDate,oldDate){
             this.clearReservations();
+            this.setEnabled(false);
+            var that = this;
+            var rpc = qr.data.Server.getInstance();
+            rpc.callAsyncSmart(function(ret){                
+                ret.forEach(function(item){
+                    that.addReservation(new qr.data.Reservation(ret))
+                });
+                that.setEnabled(true);
+            },'getCalendarDay',newDate.getTime()/1000);
         }
     }
 });

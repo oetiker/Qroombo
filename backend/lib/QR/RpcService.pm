@@ -1,8 +1,10 @@
 package QR::RpcService;
 use strict;
 use warnings;
+use Carp;
 
 use QR::Exception qw(mkerror);
+use QR::Database;
 
 use Mojo::Base -base;
 
@@ -40,8 +42,9 @@ our %allow = (
 
 has 'controller';
 
-has 'config';
-has 'database';
+has 'config' => sub {croak "config property is required\n"};
+
+has 'database' => sub { QR::Database->new(config => shift->config) };
 has 'log';
 
 sub allow_rpc_access {
@@ -86,7 +89,7 @@ Call corresponding method in L<QR::Database> to get calendar info on the given d
 
 =cut  
 
-sub getCalenarDay {
+sub getCalendarDay {
     my $self = shift;    
     return $self->database->getCalendarDay(@_); 
 }

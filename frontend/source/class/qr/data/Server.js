@@ -17,7 +17,7 @@ qx.Class.define('qr.data.Server', {
         this.base(arguments);
         this.set({
             timeout     : 15000,
-            url         : 'jsonrpc/',
+            url         : 'jsonrpc',
             serviceName : 'qr'
         });
     },

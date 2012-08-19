@@ -102,10 +102,6 @@ sub reloadConfig {
             $header{cc} = $_;
             next;
         };
-        s/^To:\s+//i && do {
-            $header{to} = $_;
-            next;
-        };
         s/^Bcc:\s+//i && do {
             $header{bcc} = $_;
             next;
