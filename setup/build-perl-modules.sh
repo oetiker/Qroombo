@@ -9,6 +9,7 @@ for module in \
     Config::Grammar \
     DBI \
     DBD::SQLite \
+    Mail::Sender \
 ; do
     perlmodule $module
 done
