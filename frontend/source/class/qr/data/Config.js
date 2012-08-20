@@ -22,9 +22,10 @@ qx.Class.define('qr.data.Config', {
         /**
          * the FRONTEND config from the master config file.
          */
-        firstHr: {},
-        lastHr: {},
-        roomIdArray: {},
-        roomIdMap: {}        
+        reservation: {},
+        room: {},
+        user: {},
+        general: {},
+        address: {}
     }
 });

@@ -68,19 +68,36 @@ sub allow_rpc_access {
 get some gloabal configuration information into the interface
 
 =cut
+sub _hashCleaner ($);
+sub _hashCleaner ($) {
+    my $hash = shift;
+    return unless ref $hash eq 'HASH';
+    for my $key (keys %$hash) {
+        given (ref $hash->{$key}){
+            when ('CODE'){
+                 delete $hash->{$key};
+            }
+            when ('HASH'){
+                 _hashCleaner $hash->{$key};
+            }
+        }
+    }
+}
 
 sub getConfig {
     my $self = shift;
     my $cfg = $self->config->cfg;
-    return {
-        RESERVATION => $cfg->{RESERVATION},
-        USER => $cfg->{USER},
-        ADDRESS => $cfg->{ADDRESS},
-        ROOM => $cfg->{ROOM},
-        GENERAL => {
+    my $ret = {
+        reservation => $cfg->{RESERVATION},
+        user => $cfg->{USER},
+        address => $cfg->{ADDRESS},
+        room => $cfg->{ROOM},
+        general => {
             title => $cfg->{GENERAL}{title}
         }
-    }
+    };
+    _hashCleaner $ret;
+    return $ret;
 }
 
 =head2 getCalendarDay(date)

@@ -29,27 +29,27 @@ qx.Class.define("qr.Application", {
                 qx.log.appender.Console;
             }
             var root = this.getRoot();
-            var cfg = qr.data.Config.getInstance().set({
-                firstHr: 7,
-                lastHr: 24,
-                roomIdArray: ['salon','sitzung','bernstein','kueche','flora','rosa'],
-                roomIdMap: {
-                    salon: 'Salon',
-                    sitzung: 'Sitzungszimmer',
-                    bernstein: 'Bernsteinzimmer',
-                    kueche: 'Küche',
-                    flora: 'Flora',
-                    rosa: 'Rosa'
-                }
+            root.add(new qx.ui.basic.Atom(this.tr('Loading Qroombo ...')).set({
+                center: true
+            }),{
+                left: 0,
+                top: 0,
+                bottom: 0,
+                right: 0
             });
 
-            var desktop = qr.ui.Desktop.getInstance();
-            root.add(desktop, {
-                left   : 10,
-                top    : 10,
-                bottom : 10,
-                right  : 10
-            });
+            var rpc = qr.data.Server.getInstance();
+            rpc.callAsyncSmart(function(ret){
+                qr.data.Config.getInstance().set(ret);
+                var desktop = qr.ui.Desktop.getInstance();
+                root.add(desktop, {
+                    left   : 10,
+                    top    : 10,
+                    bottom : 10,
+                    right  : 10
+                });
+            },'getConfig');
+
         }
     }
 });

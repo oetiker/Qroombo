@@ -10,10 +10,11 @@ QR::Config - The Qroombo File
 
  use QR::Config;
 
- my $parser = QR::Config->new(file=>'/etc/extopus/system.cfg');
+ my $c = QR::Config->new(file=>'/etc/extopus/system.cfg');
 
- my $cfg = $parser->parse_config();
- my $pod = $parser->make_pod();
+ $c->reload_config();
+ $c->make_pod();
+ my $cfg = $c->cfg;
 
 =head1 DESCRIPTION
 
@@ -73,19 +74,24 @@ sub reloadConfig {
     my $self = shift;
     my $parser = $self->_make_parser();
     my $cfg = $parser->parse($self->file) or croak($parser->{err});
+    my @roomList;
     for my $section (keys %$cfg){
         # list compiled code sections up
         next unless ref $cfg->{$section} ~~ 'HASH';
+        my $sec = $cfg->{$section};
         for my $key (keys %{$cfg->{$section}}){
-            next unless $key =~ /_PL$/ and $cfg->{$section}{$key}{_text};
-            $cfg->{$section}{$key} = $cfg->{$section}{$key}{_text};
+            next unless $key =~ /_PL$/ and $sec->{$key}{_text};
+            $sec->{$key} = $sec->{$key}{_text};
         }
         # mode per room configs into the ROOM key
         if ($section =~ /^ROOM:\s*(\S+)/){
-            $cfg->{ROOM}{$1} = $cfg->{$section};
+            $roomList[$sec->{_order}] = $1;
+            delete $sec->{_order};
+            $cfg->{ROOM}{info}{$1} = $sec;
             delete $cfg->{$section};
         }
     }
+    $cfg->{ROOM}{list} = \@roomList;
     my ($header,$body) = split /\r?\n\s*\r?\n/, $cfg->{MAIL}{KEYMAIL}{_text};
     my @header = split /\r?\n(?=\S)/, $header;
     my %header;

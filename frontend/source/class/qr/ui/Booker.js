@@ -141,10 +141,10 @@ qx.Class.define("qr.ui.Booker", {
             var overlay = this.getChildControl('overlay');
             var overlayLayout = overlay._getLayout();
             grid._add(this._mkCell(null,'background'),{row:0,column:0});
-            var roomIds = this._cfg.getRoomIdArray();
-            var roomNames = this._cfg.getRoomIdMap();
+            var roomIds = this._cfg.getRoom().list;
+            var roomInfo = this._cfg.getRoom().info;
             roomIds.forEach(function(room,row){
-                var rl = that._mkCell(roomNames[room],'background').set({
+                var rl = that._mkCell(roomInfo[room].name,'background').set({
                     padding: [ 5,5,5,10 ]
                 });
                 this._rowToRoomId[row+1] = room;
@@ -157,8 +157,8 @@ qx.Class.define("qr.ui.Booker", {
             this._colWgt = [];
             gridLayout.setColumnWidth(0,130);
             overlayLayout.setColumnWidth(0,130);
-            var start = this._cfg.getFirstHr();
-            var end = this._cfg.getLastHr();
+            var start = parseInt(this._cfg.getReservation().first_hour);
+            var end = parseInt(this._cfg.getReservation().last_hour);
             for (var hour=start,col=1;hour<end;col++,hour++){
                 var cl =  this._mkCell(String(hour),'background');
                 cl.setTextAlign('center');
@@ -207,7 +207,7 @@ qx.Class.define("qr.ui.Booker", {
                 allowGrowX: true,
                 allowShrinkX: true
             });
-            var firstHr = this._cfg.getFirstHr();
+            var firstHr = this._cfg.getReservation().first_hour;
             this.addListener('mousedown',function(e){
                 start = this._posToGrid(e);
                 if (this._occupyMap[String(start.col)+':'+String(start.row)]){
@@ -229,7 +229,6 @@ qx.Class.define("qr.ui.Booker", {
                         duration: len,
                         roomId: this._rowToRoomId[start.row],
                         editable: true,
-                        reservationId: Math.random()
                     }),function(reservation){
                         this.fireEvent('cleardrag');
                         this.addReservation(reservation);  
