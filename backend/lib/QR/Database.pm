@@ -259,7 +259,7 @@ sub login {
         $userId = $self->putEntry('user',undef,{
             user_email => $email,
             map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
-                qw(user_first user_last user_phone1 user_phone2)
+                qw(user_first user_last user_phone1)
         });
         $data->{addr_first} = $data->{user_first},
         $data->{addr_last} = $data->{user_last},

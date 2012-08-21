@@ -141,10 +141,10 @@ qx.Class.define("qr.ui.Booker", {
             var overlay = this.getChildControl('overlay');
             var overlayLayout = overlay._getLayout();
             grid._add(this._mkCell(null,'background'),{row:0,column:0});
-            var roomIds = this._cfg.getRoom().list;
-            var roomInfo = this._cfg.getRoom().info;
+            var roomIds = this._cfg.getRoomList();
             roomIds.forEach(function(room,row){
-                var rl = that._mkCell(roomInfo[room].name,'background').set({
+                var roomInfo = this._cfg.getRoomInfo(room);
+                var rl = that._mkCell(roomInfo.name,'background').set({
                     padding: [ 5,5,5,10 ]
                 });
                 this._rowToRoomId[row+1] = room;
@@ -157,8 +157,8 @@ qx.Class.define("qr.ui.Booker", {
             this._colWgt = [];
             gridLayout.setColumnWidth(0,130);
             overlayLayout.setColumnWidth(0,130);
-            var start = parseInt(this._cfg.getReservation().first_hour);
-            var end = parseInt(this._cfg.getReservation().last_hour);
+            var start = this._cfg.getFirstHour();
+            var end = this._cfg.getLastHour();
             for (var hour=start,col=1;hour<end;col++,hour++){
                 var cl =  this._mkCell(String(hour),'background');
                 cl.setTextAlign('center');
@@ -207,7 +207,7 @@ qx.Class.define("qr.ui.Booker", {
                 allowGrowX: true,
                 allowShrinkX: true
             });
-            var firstHr = this._cfg.getReservation().first_hour;
+            var firstHr = this._cfg.getFirstHour();
             this.addListener('mousedown',function(e){
                 start = this._posToGrid(e);
                 if (this._occupyMap[String(start.col)+':'+String(start.row)]){

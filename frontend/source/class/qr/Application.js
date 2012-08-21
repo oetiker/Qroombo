@@ -40,7 +40,7 @@ qx.Class.define("qr.Application", {
 
             var rpc = qr.data.Server.getInstance();
             rpc.callAsyncSmart(function(ret){
-                qr.data.Config.getInstance().set(ret);
+                qr.data.Config.getInstance().setConfig(ret);
                 var desktop = qr.ui.Desktop.getInstance();
                 root.add(desktop, {
                     left   : 10,

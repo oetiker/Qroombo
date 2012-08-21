@@ -14,18 +14,25 @@
 qx.Class.define('qr.data.Config', {
     extend : qx.core.Object,
     type : 'singleton',
-
-    events: {
-        ready: 'qx.event.type.Event'
-    },
-    properties : {
-        /**
-         * the FRONTEND config from the master config file.
-         */
-        reservation: {},
-        room: {},
-        user: {},
-        general: {},
-        address: {}
-    }
+    members: {
+        _cfg: null,
+        setConfig: function(cfg){
+            this._cfg = cfg;
+            var res = cfg.reservation;
+            res.first_hour = parseInt(res.first_hour);
+            res.last_hour = parseInt(res.last_hour);            
+        },
+        getRoomList: function(){
+            return this._cfg.room.list;
+        },
+        getRoomInfo: function(id){
+            return this._cfg.room.info[id];
+        },
+        getFirstHour: function(){
+            return this._cfg.reservation.first_hour;
+        },
+        getLastHour: function(){
+            return this._cfg.reservation.last_hour;
+        }
+    }   
 });
