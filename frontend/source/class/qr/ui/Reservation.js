@@ -29,96 +29,46 @@ qx.Class.define("qr.ui.Reservation", {
             layout: new qx.ui.layout.VBox(),
             modal: true
         });
-        
-        this.add(this._mkForm());
+        var cfg = this._cfg = qr.data.Config.getInstance();
+        cfg.addListener('addrChanged',this._updateForm,this);
         this.addListener('appear',function(){this.center()},this);
+        this._addButtons();
     },
     properties: {
     },
     events: {
     },
     members : {
-        show: function(reservation,action,context){
-            this.base(arguments);            
-            this.addListenerOnce('close',function(){
-                action.call(context,reservation);
-            });
+        _cfg: null,
+        _form: null,
+        show: function(reservation){
+            var addrId = this._cfg.getAddrId();
+            if (!addrId){
+                this._cfg.addListenerOnce('addrChanged',function(){
+                    this.show();
+                },this);
+                var login = new qr.ui.LoginPopup();
+                login.show();
+                return;
+            }
+            // ok now we open for real as we are now authenticated
+            this.base(arguments);
         },
-        _mkForm: function(){
-            var form = new qr.ui.AutoForm([
-                {
-                    key: 'room',      
-                    label: this.tr('Room'),                
-                    widget: 'text',
-                    set: {
-                        readOnly: true,                        
-                        decorator: null
-                    }
-                },
-                {
-                    key: 'date',      
-                    label: this.tr('Date'),
-                    widget: 'text',
-                    set: {
-                        readOnly: true,
-                        decorator: null
-                    }
-                },
-                {
-                    key: 'time',      
-                    label: this.tr('Time'),                
-                    widget: 'text',
-                    set: {
-                        readOnly: true,
-                        decorator: null
-                    }
-                }, 
-                {
-                    key: 'bill',      
-                    label: this.tr('Billing Address'),                
-                    widget: 'selectBox',
-                    set: {
-                        required: true
-                    }
-                }, 
-                {
-                    key: 'price',      
-                    label: this.tr('Price'),                
-                    widget: 'selectBox',
-                    set: {
-                        required: true
-                    }
-                }, 
-                {
-                    key: 'subject',      
-                    label: this.tr('Subject'),                
-                    widget: 'comboBox',
-                    cfg: {
-                        structure: [ 'Sitzung','Schulung' ]
-                    },
-                    set: {
-                        required: true
-                    }
-                }, 
-                {
-                    key: 'public',      
-                    label: this.tr('Public'),
-                    widget: 'checkBox',
-                    set: {
-                        label: this.tr('Show Subject in Calendar'),
-                        required: true
-                    }
-                },
-                {
-                    key: 'remark',  
-                    label: this.tr('Remark'),                
-                    widget: 'textArea',
-                    set: {
-                        required: true
-                    }
+        _updateForm: function(){
+            var rpc = qr.data.Server.getInstance();
+            var that = this;
+            that.setEnabled(false);
+            rpc.callAsyncSmart(function(form){
+                if (that._form){
+                    that.remove(that._form);
+                    that._form.dispose();
                 }
-                 
-            ],new qx.ui.layout.VBox(5));
+                that._form = new qr.ui.AutoForm(form,new qx.ui.layout.VBox(5));
+                that.addAt(that._form,0);
+                that.setEnabled(true);
+            },'getForm','resv');
+        },
+        _addButtons: function(){
             var row = new qx.ui.container.Composite(new qx.ui.layout.HBox(5,'right'))
             var deleteButton = new qx.ui.form.Button(this.tr("Delete"),'icon/22/actions/dialog-close.png').set({
                 width: 50
@@ -132,11 +82,7 @@ qx.Class.define("qr.ui.Reservation", {
                 width: 50
             });
             row.add(sendButton,{flex: 1});
-            form._add(row);
-            form.set({
-                allowGrowX: true
-            });
-            return form;
+            this.add(row);
         }
     }    
 });

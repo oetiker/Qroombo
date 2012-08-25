@@ -217,15 +217,6 @@ ${E}head1 SYNOPSIS
   }
  ]
 
- +SELECTBOX_CFG_PL
- my \$ret = [
-    { key => 'noprof', title => 'Non Profit Tarif' },
-    { key => 'normal', title => 'Normaltarif' },     
- ];
- if (\$D{address}{allow_free}){
-      unshift \@\$ret, { key => 'free', title => 'Gratis Nutzung' };   
- }
-
  return {
      tarif => \$ret
  };
@@ -311,11 +302,90 @@ sub _make_parser {
         my $sub = eval $perl; ## no critic (ProhibitStringyEval)
         if ($@){
             return "Failed to compile $code: $@ ";
+        }        
+        eval { $sub->({}) };
+        if ($@){
+            return "Failed to compile $code: $@ ";
+        }        
+        $_[0] = $sub;
+        return;
+    };
+    my $EXTRA_FIELDS_SUB = sub { 
+        my $code = $_[0] || '[]';
+        # check and modify content in place
+        my $perl = 'sub { my %D = (%{$_[0]}); '.$code.'}';
+        my $sub = eval $perl; ## no critic (ProhibitStringyEval)
+        if ($@){
+            return "Failed to compile $code: $@ ";
+        }
+        my $array = eval { $sub->({}) };
+        if ($@){
+            return "Failed to run $code: $@ ";
+        }
+        if (ref $array !~~ 'ARRAY'){
+            return "Code does not return an array pointer: $code ";
         }
         $_[0] = $sub;
         return;
     };
+    my $EXTRA_FIELDS_DOC = <<DOC_END;
 
+A perl expression to return an array pointer with extra field definitions
+for this section. The perl will get executed at runtime. It has
+access to the C<%D> hash containing three keys with information about the
+user, the billing address and the admin mode.
+
+ %D = (
+    user => {
+        user_id => xxx,
+        user_first => xxx,
+        ...
+    },
+    addr => {
+        addr_id => xxx,
+        addr_org => xxx,
+        addr_contact => xxx,
+    },
+    adminMode => 1|0
+ )
+
+An extra field entries support the following keys:
+
+=over
+
+=item key
+
+the name of the field
+
+=item insertBefore
+
+set the position of the entry when shown in a form, relative to the static entries
+
+=item widget  (default text)
+
+select the autoform widget to display this item
+
+=item label
+
+the text to put in front of the widget name
+
+=item set
+
+set standard widget properties
+
+=item cfg
+
+provide extra configuration for autoform
+
+=item access
+
+a hash with entries for admin and user, providing read, write and none access
+
+ access = { user => 'read', admin => 'write' }
+
+=back
+
+DOC_END
     my $grammar = {
         _sections => [ qw{ GENERAL MAIL RESERVATION USER ADDRESS ROOM /ROOM:\s*\S+/ }],
         _mandatory => [qw{ GENERAL MAIL RESERVATION USER ADDRESS ROOM }],
@@ -368,37 +438,31 @@ DOC_END
             _doc => 'Frontend tuneing parameters',
             _vars => [ qw(first_hour last_hour) ],
             _mandatory => [ qw(first_hour last_hour) ],
-            _sections => [ qw(EXTRA_FIELDS_PL SELECTBOX_CFG_PL) ],
+            _sections => [ qw(EXTRA_FIELDS_PL) ],
             first_hour => { _doc => 'from which time in the morning should RESERVATION be pssible' },
             last_hour  => { _doc => 'which is the last hour to reserve (23 means until midnight)' },
             EXTRA_FIELDS_PL => {
-                _doc => 'Extra information to store with RESERVATION. Perl expression must return array pointer in AutoForm syntax.',
+                _doc => $EXTRA_FIELDS_DOC,
                 _text => {
-                    _sub => $compileD
-                }
-            },
-            SELECTBOX_CFG_PL => {
-                _doc => 'Extra information to store with RESERVATION. Perl expression must return array pointer in AutoForm syntax.',
-                _text => {
-                    _sub => $compileD
+                    _sub => $EXTRA_FIELDS_SUB
                 }
             },
         },
         USER => {
             _sections => [ qw(EXTRA_FIELDS_PL) ],
             EXTRA_FIELDS_PL => {
-                _doc => 'Extra information to be store together with information on people using the system. Perl expression must return array pointer in AutoForm syntax.',
+                _doc => $EXTRA_FIELDS_DOC,
                 _text => {
-                    _sub => $compileD
+                    _sub => $EXTRA_FIELDS_SUB
                 }
             },
         },
         ADDRESS => {
             _sections => [ qw(EXTRA_FIELDS_PL) ],
             EXTRA_FIELDS_PL => {
-                _doc => 'Extra information to stored with invoice addresses. Perl expression must return array pointer in AutoForm syntax.',
+                _doc => $EXTRA_FIELDS_DOC,
                 _text => {
-                    _sub => $compileD
+                    _sub => $EXTRA_FIELDS_SUB
                 }
             },
         },

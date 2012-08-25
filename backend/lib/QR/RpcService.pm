@@ -34,18 +34,20 @@ our %allow = (
     getConfig => 1,
     login => 1,
     sendKey => 1,
-    getEntry => 2,
-    putEntry => 2,
-    getRowCount => 2,
-    getRows => 2,
+    getForm => 1,
+    setAddrId => 2,
+    getEntry => 3,
+    putEntry => 3,
+    getRowCount => 3,
+    getRows => 3,
 );
 
 has 'controller';
 
-has 'config' => sub {croak "config property is required\n"};
+has 'config' => sub {croak "config property is required"};
 
-has 'database' => sub { QR::Database->new(config => shift->config) };
-has 'log';
+has 'database' => sub { my $self = shift; QR::Database->new(config => $self->config, log => $self->log ) };
+has 'log'   => sub {croak "log property is required"};
 
 sub allow_rpc_access {
     my $self = shift;
@@ -56,9 +58,9 @@ sub allow_rpc_access {
     $self->database->userId($userId);
     $self->database->addrId($addrId);
     $self->database->adminMode($adminMode);
-    if ($allow{$method} ~~ 2 and not ( $userId and $addrId )){
-        die mkerror(3993,q{authentication required});
-    }
+    die mkerror(3948,q{access denied}) unless $allow{$method};
+    die mkerror(8833,q{anonymous access denied}) if $allow{$method} > 1 and not $userId;
+    die mkerror(3844,q{billing address required}) if $allow{$method} > 2 and not $addrId;
     return $allow{$method}; 
 }
    
@@ -88,16 +90,38 @@ sub getConfig {
     my $self = shift;
     my $cfg = $self->config->cfg;
     my $ret = {
-        reservation => $cfg->{RESERVATION},
-        user => $cfg->{USER},
-        address => $cfg->{ADDRESS},
-        room => $cfg->{ROOM},
-        general => {
-            title => $cfg->{GENERAL}{title}
+        cfg => {
+            reservation => $cfg->{RESERVATION},
+            user => $cfg->{USER},
+            address => $cfg->{ADDRESS},
+            room => $cfg->{ROOM},
+            general => {
+                title => $cfg->{GENERAL}{title}
+            }
         }
     };
     _hashCleaner $ret;
+    my $userId = $self->controller->session('userId');
+    my $adminMode = $self->controller->session('adminMode');    
+    my $db = $self->database;
+    $db->adminMode($adminMode);
+    if ($userId){
+        $ret->{user} = $db->getEntry('user',$userId);
+        $ret->{addrs} = $db->getRows('addr',1000,0);
+    }
     return $ret;
+}
+
+=head2 getForm(table)
+
+Call corresponding method in L<QR::Database> to get the autoform description
+for the given table.
+
+=cut  
+
+sub getForm {
+    my $self = shift;    
+    return $self->database->getForm(@_);
 }
 
 =head2 getCalendarDay(date)
@@ -111,7 +135,7 @@ sub getCalendarDay {
     return $self->database->getCalendarDay(@_); 
 }
 
-=head2 login(email,key)
+=head2 sendKey(email)
 
 Call corresponding method in L<QR::Database> to login.
 
@@ -132,37 +156,25 @@ sub login {
     my $self = shift;
     my $email = shift;
     my $key = shift;
-    my $data = shift;
+    my $userData = shift;
+    my $addrData = shift;
     my $db = $self->database;
-    my $userId = $db->login($email,$key,$data);
+    my $userId = $db->login($email,$key,$userData,$addrData);
     $self->controller->session('userId',$userId);
     $db->userId($userId);
-    $self->controller->session('adminMode', $self->config->cfg->{GENERAL}{admin}{$email});
-    my $user = $self->getEntry('user',$userId);
-    my $addrs = $self->getRows('addr',1000,0);  
-
-    # set the default address    
-    if ($user->{user_addr}){
-        for (@$addrs){
-            if ($_->{addr_id} == $user->{user_addr}){
-                $self->controller->session('addrId',$_->{addr_id});
-                last;
-            }
-        }
-    }
-    else {
-        $self->controller->session('addrId',$addrs->[0]{addr_id});
-    }
-
+    my $adminMode = $self->config->cfg->{GENERAL}{admin}{$email};
+    $self->controller->session('adminMode', $adminMode);
+    $db->adminMode($adminMode);
     return {
-        user => $user,
-        addrs => $addrs
+        user => $db->getEntry('user',$userId),
+        addrs => $db->getRows('addr',1000,0)
     }
 }
 
 =head2 setAddrId(addrId)
 
-Call the corresponding method in L<QR::Database> to select the billing address.
+Call the corresponding method in L<QR::Database> to select the billing
+address and return appropriate forms for editing the data.
 
 =cut
 
@@ -170,6 +182,7 @@ sub setAddrId {
     my $self = shift;
     my $addrId = $self->database->setAddrId(@_); 
     $self->controller->session('addrId',$addrId);
+    return $addrId;
 }
 
 =head2 getRowCount(table)

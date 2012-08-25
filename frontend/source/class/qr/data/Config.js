@@ -13,14 +13,41 @@
 
 qx.Class.define('qr.data.Config', {
     extend : qx.core.Object,
-    type : 'singleton',
+    type : 'singleton', 
+    properties: {
+        userId: {
+            event: 'userChanged',
+            init: null
+        },
+        addrId: {
+            event: 'addrChanged',
+            init: null,
+            apply: '_onAddrIdChange'
+        },
+        addrList: {
+            event: 'addrListChanged',
+            init: []
+        }
+    },
     members: {
         _cfg: null,
-        setConfig: function(cfg){
-            this._cfg = cfg;
-            var res = cfg.reservation;
+        _addrId: null,
+        _userData: null,
+        _addrList: null,            
+        _onAddrIdChange: function(newValue,oldValue){
+            this._userData.user_addr = newValue;
+        },
+        setConfig: function(data){
+            this._cfg = data.cfg;
+            var res = data.cfg.reservation;
             res.first_hour = parseInt(res.first_hour);
-            res.last_hour = parseInt(res.last_hour);            
+            res.last_hour = parseInt(res.last_hour);
+            if (data.user){
+                this.setUserData(data.user);
+            }
+            if (data.addrs){
+                this.setAddrList(data.addrs);
+            }
         },
         getRoomList: function(){
             return this._cfg.room.list;
@@ -33,6 +60,13 @@ qx.Class.define('qr.data.Config', {
         },
         getLastHour: function(){
             return this._cfg.reservation.last_hour;
+        },
+        setUserData: function(data){
+            this._userData = data;
+            this.setUserId(data.user_id);
+        },
+        getUserName: function(){
+            return this._userData.user_first + ' ' + this._userData.user_last;
         }
     }   
 });

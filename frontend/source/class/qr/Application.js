@@ -37,11 +37,14 @@ qx.Class.define("qr.Application", {
                 bottom: 0,
                 right: 0
             });
+            // initialize some pupus
+            qr.ui.AddrPickPopup.getInstance();
+            qr.ui.Reservation.getInstance();
 
             var rpc = qr.data.Server.getInstance();
             rpc.callAsyncSmart(function(ret){
                 qr.data.Config.getInstance().setConfig(ret);
-                var desktop = qr.ui.Desktop.getInstance();
+                var desktop = qr.ui.Desktop.getInstance();        
                 root.add(desktop, {
                     left   : 10,
                     top    : 10,

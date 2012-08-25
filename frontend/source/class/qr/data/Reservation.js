@@ -37,7 +37,10 @@ qx.Class.define('qr.data.Reservation', {
         /**
          * if this reservation is stored on the server, a Reservation id 
          */
-        resvId: {},
+        resvId: {
+            init: null,
+            nullable: true
+        },
         /**
          * the subject of the reservation
          */
@@ -50,7 +53,7 @@ qx.Class.define('qr.data.Reservation', {
     members: {
         _cfg: null,
         getRow: function(){
-            var rooms = this._cfg.getRoomIdArray();
+            var rooms = this._cfg.getRoomList();
             var roomId = this.getRoomId();
             var row;
             rooms.forEach(function(room,i){
@@ -62,7 +65,7 @@ qx.Class.define('qr.data.Reservation', {
         },
         getColumn: function(){
             var cfg = this._cfg;
-            var col = this.getStartHr() - cfg.getFirstHr();
+            var col = this.getStartHr() - cfg.getFirstHour();
             if (col < 0){
                 col = 0;
             }
@@ -71,10 +74,10 @@ qx.Class.define('qr.data.Reservation', {
         getColSpan: function(){
             var cfg = this._cfg;
             var end = this.getStartHr() + this.getDuration();
-            if (end > cfg.lastHr){
-                end = cfg.lastHr;
+            if (end > cfg.getLastHour()){
+                end = cfg.getLastHour();
             }
-            if (end <= cfg.firstHr){
+            if (end <= cfg.getFirstHour()){
                 return 0;
             }
             return end - this.getStartHr();

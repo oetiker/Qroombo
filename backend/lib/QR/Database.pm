@@ -5,6 +5,9 @@ use Data::Dumper;
 use Time::Local;
 use Encode;
 use Mail::Sender;
+use Digest;
+use Carp;
+use Mojo::JSON;
 
 =head1 NAME
 
@@ -85,7 +88,7 @@ has 'dbh';
 
 has encodeUtf8  => sub { find_encoding('utf8') };
 has json        => sub { Mojo::JSON->new };
-
+has log         => sub { croak "log handler is required" };
 
 =head2 B<new>(I<config>)
 
@@ -117,68 +120,163 @@ sub _connect {
     return $dbh;
 }
 
+our $TABLES = {
+    user => {
+        fields => [qw(email first last phone extra addr)],
+        conf => {
+            email => {
+                label => 'eMail',
+                sql   => 'UNIQUE',
+                access => {
+                    admin => 'write',
+                    user  => 'read'
+                }
+            },
+            first => {
+                label => 'First Name',
+            },
+            last => {
+                label => 'Last Name',
+            },
+            phone => {
+                label => 'Phone',
+            },
+            extra => {
+                opt => 1
+            },
+            addr => {
+                type => 'INTEGER',
+                opt => 1
+            }
+        },
+    },
+    addr => {
+        fields => [qw(org contact addr zip town cntry extra)],
+        conf => {
+            org => {
+                label => 'Organization',
+                opt => 1,
+            },
+            contact => {
+                label => 'Contact Name',
+            },
+            addr => {
+                label => 'Address',
+            },
+            zip => {
+                label => 'Post Code',
+            },
+            town => {
+                label => 'Town',
+            },
+            cntry => {
+                label => 'Country',
+                opt => 1
+            },
+            extra => {
+                opt => 1
+            }
+        },
+    },
+    adus => {
+        fields => [qw(addr user admin removed)],
+        conf => {
+            addr => {
+                type => 'INTEGER',
+                sql => 'REFERENCES user',
+            },
+            user => {
+                type => 'INTEGER',
+                sql => 'REFERENCES addr',
+            },
+            admin => {
+                type => 'BOOL',
+                sql => 'DEFAULT FALSE',
+            },
+            removed => {
+                type => 'BOOL',
+                sql => 'DEFAULT FALSE',
+            }
+        },
+        sql => 'CONSTRAINT adus_unique UNIQUE(adus_addr,adus_user)'
+    },
+    resv => {
+        fields => [qw(adus room start len pub price subj extra)],
+        conf => {
+            adus => {
+                type => 'INTEGER',
+                sql => 'NOT NULL REFERENCES adus',
+            },  
+            start => {
+                type => 'DATETIME',
+            },  
+            len => {
+                type => 'NUMERIC',
+            },
+            pub => {
+                type => 'BOOL',            
+                label => 'Publish',
+                widget => 'checkBox',
+                set => {
+                   label => 'Show Subject in Calendar'
+                }
+            },
+            price => {
+                type => 'NUMERIC'
+            },
+            subj => {
+                label => 'Subject'
+            },  
+            extra => {
+                opt => 1
+            },    
+        },
+    },
+    acct => {
+        fields => [ qw(addr date subj value resv) ],
+        conf => {
+            addr => {
+                sql => 'REFERENCES addr',
+                type => 'INTEGER',
+            },
+            date => {
+                type => 'DATE',
+            },
+            value => {
+                type => 'NUMERIC',
+            },
+            resv => {
+                type => 'INTEGER',
+                sql => 'REFERENCES resv'
+            },                
+        }
+    },
+    log => {
+        fields => [ qw(date user subj old new) ],
+        conf => {
+            date=> {
+                type => 'DATETIME'
+            }
+        }
+    }  
+};
 # Make sure the tables required by Qroombo exist
 sub _ensureTables {
     my $self = shift;
-    my %tables = (
-        user => <<SQL_END,
-user_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-user_email  TEXT NOT NULL UNIQUE,
-user_first  TEXT NOT NULL,
-user_last   TEXT NOT NULL,
-user_phone1 TEXT,
-user_phone2 TEXT,
-user_extra  TEXT,
-user_addr   INTEGER
-SQL_END
-        addr => <<SQL_END,
-addr_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-addr_first  TEXT NOT NULL,
-addr_last   TEXT NOT NULL,
-addr_org    TEXT,
-addr_addr1  TEXT NOT NULL,
-addr_addr2  TEXT,
-addr_zip    TEXT NOT NULL,
-addr_town   TEXT NOT NULL,
-addr_cntry  TEXT,
-addr_extra  TEXT
-SQL_END
-        adus => <<SQL_END,
-adus_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-adus_addr   INTEGER NOT NULL REFERENCES user,
-adus_user   INTEGER NOT NULL REFERENCES addr,
-adus_admin  BOOL,
-CONSTRAINT adus_unique UNIQUE(adus_addr,adus_user)
-SQL_END
-        resv => <<SQL_END,
-resv_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-resv_adus   INTEGER NOT NULL REFERENCES adus,
-resv_room   TEXT NOT NULL,
-resv_start  DATETIME NOT NULL,
-resv_len    NUMERIC NOT NULL,
-resv_pub    BOOL DEFAULT FALSE,
-resv_price  NUMERIC NOT NULL,
-resv_subj   TEXT NOT NULL,
-resv_extra  TEXT
-SQL_END
-        acct => <<SQL_END,
-acct_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-acct_addr   INTEGER NOT NULL REFERENCES addr,
-acct_date   DATE NOT NULL,
-acct_subj   TEXT NOT NULL,
-acct_value  NUMERIC,
-acct_resv   INTEGER REFERENCES resv
-SQL_END
-        log => <<SQL_END,
-log_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-log_date    DATE NOT NULL,
-log_user    TEXT NOT NULL,
-log_data    TEXT NOT_NULL
-SQL_END
-    );
     my $dbh = $self->dbh;
-    for my $tab (keys %tables){
-        $dbh->do("CREATE TABLE IF NOT EXISTS $tab ( $tables{$tab} )");
+    for my $tab (keys %$TABLES){
+        my $def = $TABLES->{$tab};
+        my @SQL = ${tab}.'_id INTEGER PRIMARY KEY AUTOINCREMENT';
+        for my $field (@{$def->{fields}}){
+            my $fdef = $def->{conf}{$field} or mkerror(38737,"Definition for $field not found in \%TABLES");
+            push @SQL,
+                $tab.'_'.$field . ' '
+              . ( $fdef->{type} || 'TEXT' )
+              . ( $fdef->{opt} ? '' : ' NOT NULL ' )
+              . ( $fdef->{sql} || '' );
+        }
+        push @SQL, $def->{sql} if $def->{sql};
+        $dbh->do("CREATE TABLE IF NOT EXISTS $tab ( ".join(",\n",@SQL)." )");
     }
 }
 
@@ -188,6 +286,77 @@ sub new {
     $self->_ensureTables();
     return $self;
 }
+
+=head2 getForm(table)
+
+Return the form description for the given table
+
+=cut
+
+# Make sure the tables required by Qroombo exist
+sub getForm {
+    my $self = shift;
+    my $table = shift;
+    my $dbh = $self->dbh;
+    my $tableDesc = $TABLES->{$table};
+    my $cfg = $self->config->cfg;
+    my @desc;
+    my @fields = @{$tableDesc->{fields}};
+    FIELD:
+    for my $field (@fields){
+        my $fdef = $tableDesc->{conf}{$field} || {}; 
+        next unless $fdef->{label};
+        $fdef->{set} ||= {};
+        my @readOnly;
+        if (my $ac = $fdef->{access}){
+            my $mode = $self->adminMode ? 'admin' : 'user';
+            given ($ac->{$mode}){
+                when ('read'){
+                    @readOnly = ( readOnly => Mojo::JSON->true, decorator => undef )
+                }
+                when ('none'){
+                    next FIELD;
+                }
+            }
+        }            
+        $self->log->debug('Pushing '.$field);
+        push @desc, {
+            key => $table.'_'.$field,
+            label => $fdef->{label},
+            widget => $fdef->{widget} || 'text',
+            set => {
+                required => $fdef->{opt} ? Mojo::JSON->false : Mojo::JSON->true,
+                %{$fdef->{set}},
+                @readOnly
+            }
+        }
+    }
+    my %cfgMap = (
+        user => 'USER',
+        addr => 'ADDRESS',
+        resv => 'RESERVATION'    
+    ); 
+    if ($cfgMap{$table}){
+        EXTRA:
+        for my $extra (@{$self->_getExtraFields($cfgMap{$table})}){
+            if ($extra->{insertBefore}){
+                for (my $i=0;$i<= $#desc;$i++){
+                    if ($desc[$i]{key} ~~ $extra->{insertBefore}){
+                        splice(@desc,$i,0,$extra);
+                        next EXTRA;
+                    }                    
+                }
+                $self->log->warn('Could not merge '.$extra->{key}.'. Since '.$extra->{insertBefore}.' was not found');
+                push @desc,$extra;
+            }
+            else {
+                push @desc,$extra;
+            }
+        };
+    }
+    return \@desc;
+}
+
 
 =head2 sendKey(email)
 
@@ -199,9 +368,11 @@ sub _mkKey {
     my $self = shift;
     my $text = lc shift;
     my $time = int( time / 3600 / 24); 
-    my $dg = Digest->new('MD5');
+    my $dg = Digest->new('SHA-512');
     $dg->add($time,$text,$self->config->cfg->{GENERAL}{secret});
-    return sprintf('%s',lc(substr($dg->hexdigest,1,6)));
+    my $key = $dg->b64digest;
+    $key =~ s/[^2-9abcdefghjkmnpqrstuvwxyz]//gi;
+    return sprintf('%s',lc(substr($key,1,5)));
 }
 
 sub sendKey {
@@ -216,30 +387,33 @@ sub sendKey {
         from => $cfg->{MAIL}{sender},
         on_errors => 'die' 
     });
-    $sender->Open({
+    my $body = $cfg->{MAIL}{KEYMAIL}{body};
+    my %map = (
+        KEY => $key,
+        TO => $email
+    );
+    my $pattern = join '|', keys %map;
+    $body =~ s/{($pattern)}/$map{$1}/g;
+    $sender->Open({ 
+        %{$cfg->{MAIL}{KEYMAIL}{header}},
         to => $email,
         charset => 'UTF-8',
         encoding => 'Quoted-printable',
-        ctype => 'text/plain',
+        ctype => 'text/plain',        
     });
-    my $body = $cfg->{MAIL}{KEYMAIL}{body};
-    my %map = {
-        KEY => $key,
-        TO => $email
-    };
-    my $pattern = join '|', keys %map;
-    $body =~ s/{($pattern)}/$map{$1}/g;
-    my $header = $cfg->{MAIL}{KEYMAIL}{header};
-    $header->{to} = $email;
-    $sender->Open($header);
     $sender->SendEnc($body);
     $sender->Close();
     my $user = $self->_getRawEntry('user','user_email',$email);
-    return { userId => $user->{user_id} }
+    return {
+        eMail => $email,
+        userId => $user->{user_id},
+        userForm => $self->getForm('user'),
+        addrForm => $self->getForm('addr')
+    };
 }
 
 
-=head2 login(email,key,userData)
+=head2 login(email,key,userData,addrData)
 
 login the user, if he provides an email and a key
 new users must provide additional information.
@@ -250,31 +424,35 @@ sub login {
     my $self = shift;
     my $email = lc shift;
     my $userKey = shift;
-    my $data = shift;
+    my $userData = shift;
+    my $addrData = shift;
     my $realKey = $self->_mkKey($email);
     die mkerror(3984,"not a valid key provided") unless $userKey ~~ $realKey;
     my $userRaw = $self->_getRawEntry('user','user_email',$email);
     my $userId =  $userRaw->{user_id};
     if (not $userId){
-        $userId = $self->putEntry('user',undef,{
-            user_email => $email,
-            map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
-                qw(user_first user_last user_phone1)
-        });
-        $data->{addr_first} = $data->{user_first},
-        $data->{addr_last} = $data->{user_last},
-        my $addrId = $self->putEntry('addr',undef,{
-            map { $data->{$_} ? ( $_ => $data->{$_} ) : () } 
-                qw(addr_first addr_last addr_org addr_addr1 addr_addr2 addr_zip addr_town addr_cntry)
-        });
-        $self->putEntry('adus',undef,{
-            adus_addr => $addrId,
-            adus_user => $userId,
-            adus_admin => 1
-        });
-                
-    }
-
+        $self->dbh->begin_work;
+        eval {
+            $userId = $self->putEntry('user',undef,{
+                %$userData,
+                user_email => $email
+            });
+            my $addrId = $self->putEntry('addr',undef,$addrData);
+            $self->putEntry('adus',undef,{
+                adus_addr => $addrId,
+                adus_user => $userId,
+                adus_admin => 1
+            });
+            $self->putEntry('user',$userId,{
+                user_addr => $addrId
+            });       
+        };
+        if ($@){
+            $self->dbh->rollback;
+            die $@;
+        }
+        $self->dbh->commit;         
+    }    
     return $userId;
 }
 
@@ -357,6 +535,7 @@ sub _getRawRows {
     my $tableIn = shift;
     my $columnIn = shift;
     my $value = shift;
+    return [] unless defined $value;
     my $dbh = $self->dbh;
     my $table = $dbh->quote_identifier($tableIn);
     my $column = $dbh->quote_identifier($columnIn);
@@ -366,7 +545,35 @@ sub _getRawRows {
 # just return the data without any checks
 sub _getRawEntry {
     my $self = shift;
-    return ($self->_getRawRows(@_))[0];
+    my $data = $self->_getRawRows(@_);
+    return ($data->[0] || {});
+}
+
+# create arguments to be supplied to the EXTRA_FIELDS_PL function
+sub _prepExtraArgs {
+    my $self = shift;
+    my $args = {
+        user => $self->_getRawEntry('user','user_id',$self->userId),
+        addr => $self->_getRawEntry('addr','addr_id',$self->addrId),
+        adminMode => $self->adminMode
+    };
+    for my $table (qw(user addr)){
+        my $rec = $args->{$table};
+        if ($rec->{$table.'_extra'}){
+            my $extra = $self->json->decode($rec->{$table.'_extra'});
+            delete $rec->{$table.'_extra'};
+            map {$rec->{$_} = $extra->{$_}} keys %$extra;
+        }
+    }
+    return $args;
+}
+
+sub _getExtraFields {
+    my $self = shift;
+    my $section = shift;
+    my $cfg = $self->config->cfg;
+    my $sub = $cfg->{$section}{EXTRA_FIELDS_PL};
+    return ($sub ? $sub->($self->_prepExtraArgs) : [])
 }
 
 # remove extra fields from data hash and return a extra hash containing those
@@ -375,35 +582,38 @@ sub _extraFilter {
     my $self = shift;
     my $section = shift;
     my $data = shift;
-    my $mode = shift // 'read';
+    my $mode = shift || 'read';
     my $cfg = $self->config->cfg->{$section};
     my %ret;
-    if ($cfg->{EXTRA_FIELDS_PL}){
-        my $extraFields = $cfg->{EXTRA_FIELDS_PL}();
-        for my $field (@$extraFields){
-            my $key = $field->{key};
-            my $accessClass = $self->adminMode ? 'admin' : 'user';
-            my $access = $field->{access}{$accessClass} // 'write';
-            my $value = $data->{$key};
-            delete $data->{$key};
-            next if $access ~~ 'none';
-            next if $mode ~~ 'write' and $access ~~ 'read';
-            $ret{$key} = $value;
-        }
+    my $extraFields = $self->_getExtraFields($section);
+    for my $field (@$extraFields){
+        my $key = $field->{key};
+        my $accessClass = $self->adminMode ? 'admin' : 'user';
+        my $access = $field->{access}{$accessClass} || 'write';
+        my $value = $data->{$key};
+        delete $data->{$key};
+        next if $access ~~ 'none';
+        next if $mode ~~ 'write' and $access ~~ 'read';
+        $ret{$key} = $value;
     }
     return \%ret;
 }
+
 
 # apply extra filter to an array of data
 sub _arrayExtraFilter {
     my $self = shift;
     my $section = shift;
+    my $table = shift;
     my $data = shift;
     for my $row (@$data){
-        my $extra = $self->_extraFilter('ADDRESS',$row);
-        for my $key (keys %$extra) {
-            $row->{$key} = $extra->{$key} 
+        if ($row->{$table.'_extra'}){
+            my $extra = $self->_extraFilter($section,$row);
+            for my $key (keys %$extra) {
+                $row->{$key} = $extra->{$key} 
+            }
         }
+        delete $row->{$table.'_extra'};
     }
 }
 
@@ -641,7 +851,7 @@ SELECT *
   $ORDER
   LIMIT ? OFFSET ?
 SQL_END
-            $self->_arrayExtraFilter('ADDRESS',$data);
+            $self->_arrayExtraFilter('ADDRESS','addr',$data);
         }
         when ('user'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->adminMode ? 1 : 0,$self->userId,$limit,$offset);
@@ -651,7 +861,7 @@ SELECT *
   $ORDER
   LIMIT ? OFFSET ?
 SQL_END
-            $self->_arrayExtraFilter('USER',$data);
+            $self->_arrayExtraFilter('USER','user',$data);
         }
         when ('resv'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
@@ -663,7 +873,7 @@ SELECT resv_id, resv_room, resv_start,resv_len,resv_price,resv_subj,resv_extra,u
   $ORDER
   LIMIT ? OFFSET ?
 SQL_END
-            $self->_arrayExtraFilter('RESERVATION',$data);
+            $self->_arrayExtraFilter('RESERVATION','resv',$data);
         }
         when ('acct'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);

@@ -42,16 +42,21 @@ qx.Class.define("qr.ui.AutoForm", {
     construct : function(structure,layout,renderer){
         this.base(arguments);
         this._setLayout(layout || new qx.ui.layout.Grow());
-        var form = new qx.ui.form.Form();        
+        var form = this._form = new qx.ui.form.Form();
+        this._ctrl = {};
         var formCtrl = new qx.data.controller.Form(null, form);
         this._boxCtrl = {};
         for (var i=0;i<structure.length;i++){
             var s = structure[i];
             if (s.key == null){
                 throw new Error('the key property is required');
-            }            
+            }           
+            if (s.widget == 'header'){
+                form.addGroupHeader(s.label);
+                continue;
+            }
             var cfg = s.cfg || {};
-            var control;
+            var control;            
             switch (s.widget){
                 case 'date':
                     control = new qx.ui.form.DateField().set({
@@ -66,7 +71,7 @@ qx.Class.define("qr.ui.AutoForm", {
                 case 'textArea':
                     control = new qx.ui.form.TextArea();
                     break;
-                case 'checkBox':
+                case 'checkBox':                
                     control = new qx.ui.form.CheckBox();                    
                     break;
                 case 'selectBox':
@@ -95,6 +100,7 @@ qx.Class.define("qr.ui.AutoForm", {
             if (s.set){
                 control.set(s.set);
             }
+            this._ctrl[s.key] = control;
             form.add(control, s.label,null,s.key);
             if (s.widget == 'date'){
                 formCtrl.addBindingOptions(s.key, { 
@@ -126,7 +132,9 @@ qx.Class.define("qr.ui.AutoForm", {
         var fl = formWgt.getLayout();
         // have plenty of space for input, not for the labels
         fl.setColumnFlex(0,0);
+        fl.setColumnWidth(0,130);
         fl.setColumnFlex(1,1);
+        fl.setColumnMinWidth(1,130);
         this._add(formWgt);
 
     },
@@ -141,8 +149,19 @@ qx.Class.define("qr.ui.AutoForm", {
 
     members: {
         _boxCtrl: null,
+        _ctrl: null,
+        _form: null, 
         _model: null,
         _settingData: false,
+        validate: function(){
+            return this._form.validate();
+        },
+        /**
+         * get a handle to the control with the given name 
+         */
+        getControl: function(key){
+            return this._ctrl[key];
+        },
         /**
          * fetch the data for this form
          */

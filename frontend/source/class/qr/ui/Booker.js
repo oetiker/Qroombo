@@ -228,7 +228,7 @@ qx.Class.define("qr.ui.Booker", {
                         startHr: begin,
                         duration: len,
                         roomId: this._rowToRoomId[start.row],
-                        editable: true,
+                        editable: true
                     }),function(reservation){
                         this.fireEvent('cleardrag');
                         this.addReservation(reservation);  
