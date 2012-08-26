@@ -42,12 +42,15 @@ qx.Class.define('qr.data.Config', {
             var res = data.cfg.reservation;
             res.first_hour = parseInt(res.first_hour);
             res.last_hour = parseInt(res.last_hour);
-            if (data.user){
+            if (data.user && data.user.user_id){
                 this.setUserData(data.user);
             }
-            if (data.addrs){
+            if (data.addrs && data.addrs.length > 0){
                 this.setAddrList(data.addrs);
             }
+        },
+        getCurrency: function(){
+            return this._cfg.general.currency;
         },
         getRoomList: function(){
             return this._cfg.room.list;

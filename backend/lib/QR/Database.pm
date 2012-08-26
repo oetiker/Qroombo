@@ -201,11 +201,11 @@ our $TABLES = {
         sql => 'CONSTRAINT adus_unique UNIQUE(adus_addr,adus_user)'
     },
     resv => {
-        fields => [qw(adus room start len pub price subj extra)],
+        fields => [qw(addr room start len pub price subj extra)],
         conf => {
-            adus => {
+            addr => {
                 type => 'INTEGER',
-                sql => 'NOT NULL REFERENCES adus',
+                sql => 'NOT NULL REFERENCES addr',
             },  
             start => {
                 type => 'DATETIME',
@@ -222,7 +222,12 @@ our $TABLES = {
                 }
             },
             price => {
-                type => 'NUMERIC'
+                type => 'NUMERIC',
+                label => 'Price',
+                access => {
+                    admin => 'read',
+                    user  => 'read'
+                }
             },
             subj => {
                 label => 'Subject'
@@ -302,6 +307,7 @@ sub getForm {
     my $cfg = $self->config->cfg;
     my @desc;
     my @fields = @{$tableDesc->{fields}};
+    my $mode = $self->adminMode ? 'admin' : 'user';
     FIELD:
     for my $field (@fields){
         my $fdef = $tableDesc->{conf}{$field} || {}; 
@@ -309,7 +315,6 @@ sub getForm {
         $fdef->{set} ||= {};
         my @readOnly;
         if (my $ac = $fdef->{access}){
-            my $mode = $self->adminMode ? 'admin' : 'user';
             given ($ac->{$mode}){
                 when ('read'){
                     @readOnly = ( readOnly => Mojo::JSON->true, decorator => undef )
@@ -319,7 +324,6 @@ sub getForm {
                 }
             }
         }            
-        $self->log->debug('Pushing '.$field);
         push @desc, {
             key => $table.'_'.$field,
             label => $fdef->{label},
@@ -335,10 +339,21 @@ sub getForm {
         user => 'USER',
         addr => 'ADDRESS',
         resv => 'RESERVATION'    
-    ); 
-    if ($cfgMap{$table}){
+    );
+    if (my $cfgSection = $cfgMap{$table}){
         EXTRA:
-        for my $extra (@{$self->_getExtraFields($cfgMap{$table})}){
+        for my $extra (@{$self->_getExtraFields($cfgSection)}){
+            if (my $ac = $extra->{access}){
+                given ($ac->{$mode}){
+                    when ('read'){
+                        $extra->{set}{readOnly} = Mojo::JSON->true;
+                        $extra->{set}{decorator} = undef;
+                    }
+                    when ('none'){
+                        next EXTRA;
+                    }
+                }
+            }
             if ($extra->{insertBefore}){
                 for (my $i=0;$i<= $#desc;$i++){
                     if ($desc[$i]{key} ~~ $extra->{insertBefore}){
@@ -433,11 +448,13 @@ sub login {
     if (not $userId){
         $self->dbh->begin_work;
         eval {
+            $self->adminMode(1); # get some extra privileges
             $userId = $self->putEntry('user',undef,{
                 %$userData,
                 user_email => $email
             });
             my $addrId = $self->putEntry('addr',undef,$addrData);
+            $self->adminMode(1);
             $self->putEntry('adus',undef,{
                 adus_addr => $addrId,
                 adus_user => $userId,
@@ -445,7 +462,7 @@ sub login {
             });
             $self->putEntry('user',$userId,{
                 user_addr => $addrId
-            });       
+            });
         };
         if ($@){
             $self->dbh->rollback;
@@ -456,6 +473,24 @@ sub login {
     return $userId;
 }
 
+=head2 getPrice(resv)
+
+calculate the price for the given reservation
+
+=cut
+
+sub getPrice {
+    my $self = shift;
+    my $resv = shift;
+    my $args = $self->_prepExtraArgs();
+    my $roomCfg = $self->config->cfg->{ROOM};
+    return $roomCfg->{PRICE_PL}->({
+        %$args, 
+        resv => $resv,
+        room =>  $roomCfg->{info}{$resv->{resv_room}}{DATA_PL}->({ %$args, resv=> $resv })
+    });            
+}
+    
 =head2 setAddrId(id)
 
 Activate the given address id for the user
@@ -499,15 +534,14 @@ SELECT resv_id,
        resv_len,
        resv_pub,
        resv_subj,
-       adus_addr
+       resv_addr
   FROM resv 
-  JOIN adus ON (resv_adus = adus_id)  
   WHERE date(resv_start,'utc') = ?
 SQL_END
     my @ret;
     my $addrId = $self->addrId;
     for my $res (@$resArray){
-        my $mine = $res->{adus_addr} ~~ $addrId;
+        my $mine = $res->{resv_addr} ~~ $addrId;
         push @ret, {
             resvId => $res->{resv_id},
             roomId => $res->{resv_room},
@@ -662,10 +696,8 @@ SQL_END
             }
         }
         when ('resv'){
-            my $adus = $self->_getRawEntry('adus','adus_id',$rec->{resv_adus});
             if ( $self->adminMode 
-                or $adus->{adus_user} ~~ $self->userId 
-                or $adus->{adus_addr} ~~ $self->addrId ){
+                or $rec->{resv_addr} ~~ $self->addrId ){
                 $extra = $self->_extraFilter('RESERVATION',$extra);
                 return { %$extra, %$rec};
             }
@@ -718,15 +750,10 @@ sub putEntry {
         when ('resv'){
             my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
             my $adusId = $adus->{adus_id};
-            if ($self->adminMode and not $adus->{adus_id}){
-                # insert admin permission as required
-                $adusId = $self->putEntry('adus',undef,{
-                    adus_addr => $self->addrId,
-                    adus_user => $self->userId,
-                    adus_admin => 1
-                });
-            }            
-            $rec->{resr_adus} = $adusId;            
+            die mkerror(29344,"No permission to add reservation as no matching adus entry was found")
+                if not $adusId and not $self->adminMode;
+            $rec->{resv_addr} = $self->addrId;            
+            $rec->{resv_price} = $self->getPrice($rec);
             $extra = $self->_extraFilter('RESERVATION',$rec,'write');
         }
         when ('acct'){
@@ -774,6 +801,57 @@ SQL_END
         $recId = $dbh->last_insert_id("","","","");
     }
     return $recId;
+}
+
+=head2 removeEntry(table,id)
+
+Remove the given entry from the table.
+
+=cut
+
+sub removeEntry {
+    my $self = shift;
+    my $table = shift;
+    my $recId = shift;    
+    my $dbh = $self->dbh;
+    my $rec = $self->_getRawEntry($table,$table.'_id',$recId);   
+    given ($table) {
+        when ('addr'){                       
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND NOT adus_removed AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
+            die mkerror(95334,"No premission to remove that address record")
+                if not $adus->{adus_id} and not $self->adminMode;
+        }
+        when ('user'){
+            die mkerror(38344,"No permission to remove user entry.")
+                if  not $self->adminMode;
+        }
+        when ('resv'){
+            die mkerror(38345,"No permission to remove reservation entry.")
+                if not $rec->{resv_addr} ~~ $self->addrId and not $self->adminMode;
+        }
+        when ('acct'){
+            die mkerror(8744,"No permission to remove accounting records.")
+                if not $self->adminMode;
+        }
+        when ('adus'){
+            my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
+            die mkerror(8344,"No permissions to remove adus table entry") 
+                if not $self->adminMode and not $adus->{adus_admin};
+            $self->putEntry('adus',$recId,{ adus_removed => 1 });
+        }
+        default {
+            die mkerror(3945,"Table $table not open removal calls");
+        }
+    }
+    my $tableQ = $dbh->quote_identifier($table);          
+    my $recIdQ = $dbh->quote_identifier($table.'_id');          
+    my $ret;
+    if ($recId){
+        $ret = $dbh->do(<<SQL_END,{},$recId);
+DELETE FROM $tableQ WHERE $recIdQ = ?
+SQL_END
+    }
+    return $ret;    
 }
 
 =head2 getRowCount(table)

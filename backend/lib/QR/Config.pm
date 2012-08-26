@@ -79,7 +79,7 @@ sub reloadConfig {
         # list compiled code sections up
         next unless ref $cfg->{$section} ~~ 'HASH';
         my $sec = $cfg->{$section};
-        for my $key (keys %{$cfg->{$section}}){
+        for my $key (keys %$sec){
             next unless $key =~ /_PL$/ and $sec->{$key}{_text};
             $sec->{$key} = $sec->{$key}{_text};
         }
@@ -117,7 +117,7 @@ sub reloadConfig {
     $cfg->{MAIL}{KEYMAIL} = {
         header => \%header,
         body => $body
-    };    
+    };
     $self->cfg($cfg);    
 }
 
@@ -191,6 +191,7 @@ ${E}head1 SYNOPSIS
  log_level = debug
  database_dir = /tmp/qroombo
  title = Flörli Olten
+ currency = CHF
 
  *** MAIL ***
  smtp_server = smtp.example.com
@@ -391,8 +392,8 @@ DOC_END
         _mandatory => [qw{ GENERAL MAIL RESERVATION USER ADDRESS ROOM }],
         GENERAL => {
             _doc => 'Global configuration settings for Qroomo',
-            _vars => [ qw(database_dir secret log_file log_level title admin) ],
-            _mandatory => [ qw(database_dir secret log_file admin) ],
+            _vars => [ qw(database_dir secret log_file log_level title admin currency) ],
+            _mandatory => [ qw(database_dir secret log_file admin currency) ],
             database_dir => { _doc => 'where to keep the qroombo database',
                 _sub => sub {
                     if ( not -d $_[0] ){
@@ -400,6 +401,9 @@ DOC_END
                     }
                     -d $_[0] ? undef : "Database directory $_[0] does not exist (and could not be created)";
                 }
+            },
+            currrency => {
+                _doc => 'the local currency symbol'
             },
             secret => { _doc => 'secret for signing mojo cookies' },
             log_file => { _doc => 'write a log file to this location (unless in development mode)'},

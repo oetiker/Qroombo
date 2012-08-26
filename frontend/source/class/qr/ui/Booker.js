@@ -220,19 +220,21 @@ qx.Class.define("qr.ui.Booker", {
                 drag.setLabel(String(begin)+' - '+String(begin+len));
                 down = true;
             },this);
+
+            var resDialog = qr.ui.Reservation.getInstance();
             this.addListener('mouseup',function(e){
                 if (down){
                     down = false;
-                    var detail = qr.ui.Reservation.getInstance();
-                    detail.show(new qr.data.Reservation().set({
+                    resDialog.addListenerOnce('close',function(){
+                        this.fireEvent('cleardrag');
+                    },this);
+                    resDialog.show(new qr.data.Reservation().set({
+                        startDate: this.getDate(),
                         startHr: begin,
                         duration: len,
                         roomId: this._rowToRoomId[start.row],
                         editable: true
-                    }),function(reservation){
-                        this.fireEvent('cleardrag');
-                        this.addReservation(reservation);  
-                    },this);                    
+                    }));
                 }            
             },this);
             

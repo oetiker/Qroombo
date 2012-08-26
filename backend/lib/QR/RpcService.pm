@@ -35,9 +35,11 @@ our %allow = (
     login => 1,
     sendKey => 1,
     getForm => 1,
+    getPrice => 1,
     setAddrId => 2,
     getEntry => 3,
     putEntry => 3,
+    removeEntry => 3,
     getRowCount => 3,
     getRows => 3,
 );
@@ -70,21 +72,6 @@ sub allow_rpc_access {
 get some gloabal configuration information into the interface
 
 =cut
-sub _hashCleaner ($);
-sub _hashCleaner ($) {
-    my $hash = shift;
-    return unless ref $hash eq 'HASH';
-    for my $key (keys %$hash) {
-        given (ref $hash->{$key}){
-            when ('CODE'){
-                 delete $hash->{$key};
-            }
-            when ('HASH'){
-                 _hashCleaner $hash->{$key};
-            }
-        }
-    }
-}
 
 sub getConfig {
     my $self = shift;
@@ -96,11 +83,11 @@ sub getConfig {
             address => $cfg->{ADDRESS},
             room => $cfg->{ROOM},
             general => {
-                title => $cfg->{GENERAL}{title}
+                title => $cfg->{GENERAL}{title},
+                currency => $cfg->{GENERAL}{currency},
             }
         }
     };
-    _hashCleaner $ret;
     my $userId = $self->controller->session('userId');
     my $adminMode = $self->controller->session('adminMode');    
     my $db = $self->database;
@@ -183,6 +170,48 @@ sub setAddrId {
     my $addrId = $self->database->setAddrId(@_); 
     $self->controller->session('addrId',$addrId);
     return $addrId;
+}
+
+=head2 putEntry(table,recId,rec)
+
+Update or add the given entry in the database. If recId is null
+a new entry is created.
+
+=cut
+
+sub putEntry {
+    return shift->database->putEntry(@_);
+}
+
+=head2 getEntry(table,recId)
+
+Return the given entry in the database. If recId is null
+a new entry is created.
+
+=cut
+
+sub getEntry {
+    return shift->database->getEntry(@_);
+}
+
+=head2 removeEntry(table,recId)
+
+Remove the indicated entry from the database
+
+=cut
+
+sub removeEntry {
+    return shift->database->removeEntry(@_);
+}
+
+=head2 getPrice(resv)
+
+calculate the price for the given reservation entry.
+
+=cut
+
+sub getPrice {
+    return shift->database->getPrice(@_);
 }
 
 =head2 getRowCount(table)
