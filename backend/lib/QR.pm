@@ -88,8 +88,8 @@ sub startup {
     # session is valid for 1 month
     $self->sessions->default_expiration(30*24*3600);
 
-    # prevent our cookie from colliding
-    $self->sessions->cookie_name('QR_'.hmac_sha1_sum(slurp($self->config_file)));
+    # prevent our cookie from colliding tagging it with the config file path
+    $self->sessions->cookie_name('QR_'.hmac_sha1_sum($self->config_file));
 
     my $routes = $self->routes;
 

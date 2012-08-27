@@ -78,7 +78,7 @@ qx.Class.define("qr.ui.ReservationPopup", {
                 that.addAt(that._form,0);
                 that.setEnabled(true);
                 var hold = false;
-                that._form.addListener('changeData',function(e){
+                var updatePrice = function(e){
                     if (hold){
                         return;
                     }
@@ -88,7 +88,8 @@ qx.Class.define("qr.ui.ReservationPopup", {
                         that._form.setData({resv_price: currencyFormat.format(price)});
                         hold = false;
                     },'getPrice',that._mkResv(resvForm));
-                },that);
+                };
+                that._form.addListener('changeData',updatePrice,that);
             },'getForm','resv');
 
         },
@@ -125,6 +126,9 @@ qx.Class.define("qr.ui.ReservationPopup", {
             });
             row.add(sendButton,{flex: 1});
             sendButton.addListener('execute',function(){
+                if (! this._form.validate() ){
+                    return;
+                }
                 var data = this._form.getData();
                 rpc.callAsyncSmart(function(ret){
                     that.close();
@@ -147,6 +151,10 @@ qx.Class.define("qr.ui.ReservationPopup", {
                         that.setEnabled(true);
                     },'getEntry','resv',resvId);
                 }
+                else {
+                    form.setData({resv_price: ''});
+                }
+
             },this);
             this.add(row);
         },
