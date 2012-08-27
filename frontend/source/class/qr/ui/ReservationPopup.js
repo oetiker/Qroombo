@@ -12,7 +12,7 @@
 /**
   * get details on booking
   */
-qx.Class.define("qr.ui.Reservation", {
+qx.Class.define("qr.ui.ReservationPopup", {
     extend : qx.ui.window.Window,
     type: 'singleton',
     construct : function() {                
@@ -46,6 +46,7 @@ qx.Class.define("qr.ui.Reservation", {
     members : {
         _cfg: null,
         _form: null,
+        _resv: null,
         show: function(reservation){
             var addrId = this._cfg.getAddrId();
             if (!addrId){
@@ -82,11 +83,11 @@ qx.Class.define("qr.ui.Reservation", {
                         return;
                     }
                     hold = true;
-                    var resv = e.getData();
+                    var resvForm = e.getData();
                     rpc.callAsyncSmart(function(price){
                         that._form.setData({resv_price: currencyFormat.format(price)});
                         hold = false;
-                    },'getPrice',that._mkResv(resv));
+                    },'getPrice',that._mkResv(resvForm));
                 },that);
             },'getForm','resv');
 
@@ -101,14 +102,14 @@ qx.Class.define("qr.ui.Reservation", {
             });
             row.add(deleteButton,{flex: 1});
             deleteButton.addListener('execute',function(){
-                var resvId = this.getResvId();
+                var resvId = this.getReservation().getResvId();
                 if (!resvId){
                     return ;
                 }
                 rpc.callAsyncSmart(function(ret){
                     that.close();
-                    qr.ui.Booker.getInstance().reload(); 
-                },'removeEntry',this.getResvId());
+                    qr.ui.Booker.getInstance().reload();
+                },'removeEntry','resv',resvId);
             },this);
 
             var cancelButton = new qx.ui.form.Button(this.tr("Cancel"),'icon/22/actions/dialog-cancel.png').set({
@@ -127,18 +128,22 @@ qx.Class.define("qr.ui.Reservation", {
                 var data = this._form.getData();
                 rpc.callAsyncSmart(function(ret){
                     that.close();
-                    qr.ui.Booker.getInstance().reload(); 
+                    qr.ui.Booker.getInstance().reload();
                 },'putEntry','resv',this.getReservation().getResvId(),this._mkResv(data));
             },this);
+
             this.addListener('reservationChanged',function(e){
                 var resv = e.getData();
                 var resvId = resv.getResvId();
                 deleteButton.setVisibility( resvId ? 'visible' : 'hidden' );
                 var form = this._form;
+                form.reset();
+                that._resv = null;
                 if (resvId){
                     this.setEnabled(false);
                     rpc.callAsyncSmart(function(data){
-                        form.setData(data);
+                        that._resv = data;
+                        form.setData(data,true); /* only set fields that are available */
                         that.setEnabled(true);
                     },'getEntry','resv',resvId);
                 }
@@ -146,16 +151,22 @@ qx.Class.define("qr.ui.Reservation", {
             this.add(row);
         },
         _mkResv: function(resv){
-            var res = this.getReservation();
-            if (!res.getResvId()){
-                var date = res.getStartDate();
+            var resvObj = this.getReservation();
+            var resvRec = this._resv;
+            if (! resvRec ){
+                var date = resvObj.getStartDate();
                 var start = Date.UTC(
                     date.getFullYear(),date.getMonth(),date.getDate(),
-                    res.getStartHr(),0,0,0
+                    resvObj.getStartHr(),0,0,0
                 );
                 resv.resv_start = start/1000;
-                resv.resv_len = res.getDuration();
-                resv.resv_room = res.getRoomId();
+                resv.resv_len = resvObj.getDuration();
+                resv.resv_room = resvObj.getRoomId();
+            }
+            else {
+                for (var key in resvRec){
+                    resv[key] = resvRec[key];
+                }
             }
             return resv;    
         }

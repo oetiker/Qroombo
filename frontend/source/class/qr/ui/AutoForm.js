@@ -46,6 +46,7 @@ qx.Class.define("qr.ui.AutoForm", {
         this._ctrl = {};
         var formCtrl = new qx.data.controller.Form(null, form);
         this._boxCtrl = {};
+        var tm = this._typeMap = {};
         for (var i=0;i<structure.length;i++){
             var s = structure[i];
             if (s.key == null){
@@ -64,15 +65,19 @@ qx.Class.define("qr.ui.AutoForm", {
                         dateFormat  : new qx.util.format.DateFormat(this.tr("dd.MM.yyyy")),
                         placeholder : 'now'
                     });
+                    tm[s.key] = 'date';
                     break;                                    
                 case 'text':
                     control = new qx.ui.form.TextField();
+                    tm[s.key] = 'text';
                     break;
                 case 'textArea':
                     control = new qx.ui.form.TextArea();
+                    tm[s.key] = 'text';
                     break;
                 case 'checkBox':                
                     control = new qx.ui.form.CheckBox();                    
+                    tm[s.key] = 'bool';
                     break;
                 case 'selectBox':
                     control = new qx.ui.form.SelectBox();
@@ -153,8 +158,12 @@ qx.Class.define("qr.ui.AutoForm", {
         _form: null, 
         _model: null,
         _settingData: false,
+        _typeMap: null,
         validate: function(){
             return this._form.validate();
+        },
+        reset: function(){
+            this._form.reset();
         },
         /**
          * get a handle to the control with the given name 
@@ -171,8 +180,8 @@ qx.Class.define("qr.ui.AutoForm", {
         /**
          * load new data into the data main model
          */
-        setData: function(data){
-            this._setData(this._model,data);
+        setData: function(data,relax){
+            this._setData(this._model,data,relax);
         },
         /**
          * set the data in a selectbox
@@ -192,15 +201,31 @@ qx.Class.define("qr.ui.AutoForm", {
         },
         /**
          * load new data into a model
+         * if relax is set unknown properties will be ignored
          */
-        _setData: function(model,data){
+        _setData: function(model,data,relax){
             this._settingData = true;
             for (var key in data){
                 var upkey = qx.lang.String.firstUp(key);
                 var setter = 'set'+upkey;
                 var getter = 'get'+upkey;
-                if (model[setter]){                    
-                    model[setter](qx.lang.Type.isNumber(model[getter]()) ? parseInt(data[key]) : data[key]);
+                var value = data[key];
+                if (relax && ! model[setter]){
+                    continue;
+                }
+                switch (this._typeMap[key]) {
+                    case 'text': 
+                        model[setter](String(value));
+                        break;
+                    case 'bool':
+                        model[setter](parseInt(value) != 0);
+                        break;
+                    case 'date':
+                        model[setter](new Date(value));
+                        break;
+                    default:
+                        model[setter](qx.lang.Type.isNumber(model[getter]()) ? parseInt(value) : value);
+                        break;
                 }
             }
             this._settingData = false;

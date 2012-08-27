@@ -37,13 +37,17 @@ qx.Class.define("qr.Application", {
                 bottom: 0,
                 right: 0
             });
-            // initialize some pupus
-            qr.ui.AddrPickPopup.getInstance();
-            qr.ui.Reservation.getInstance();
 
             var rpc = qr.data.Server.getInstance();
             rpc.callAsyncSmart(function(ret){
+                /**
+                 order is important as addrpick will observer the addrlist
+                 in config to ask for addr choice if multiple addresses are
+                 on offer 
+                 **/
+                qr.ui.AddrPickPopup.getInstance();
                 qr.data.Config.getInstance().setConfig(ret);
+                qr.ui.ReservationPopup.getInstance();
                 var desktop = qr.ui.Desktop.getInstance();        
                 root.add(desktop, {
                     left   : 10,

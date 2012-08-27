@@ -82,6 +82,9 @@ qx.Class.define("qr.ui.Booker", {
             }
             overlay._remove(item); 
         },
+        reload: function(){
+            this._applyDate(this.getDate());
+        },
         _mkMarker: function(reservation){
             var marker;
             if (reservation.getEditable()){
@@ -97,16 +100,13 @@ qx.Class.define("qr.ui.Booker", {
                     });  
                     marker.addListener('mouseover',function(){
                         marker.setBackgroundColor('#eff');
-                    });                  
+                    });                   
                     marker.addListener('mouseout',function(){
                         marker.setBackgroundColor('#eef');
                     });                  
                     marker.addListener('click',function(){
-                        var detail = qr.ui.Reservation.getInstance();
-                        detail.show(marker.getUserData('reservation'),
-                        function(reservation){
-                        },this);                    
-                        this.fireEvent('cleardrag');
+                        var detail = qr.ui.ReservationPopup.getInstance();
+                        detail.show(marker.getUserData('reservation'));
                     },this);                  
                 }
             }
@@ -221,7 +221,7 @@ qx.Class.define("qr.ui.Booker", {
                 down = true;
             },this);
 
-            var resDialog = qr.ui.Reservation.getInstance();
+            var resDialog = qr.ui.ReservationPopup.getInstance();
             this.addListener('mouseup',function(e){
                 if (down){
                     down = false;
@@ -301,11 +301,11 @@ qx.Class.define("qr.ui.Booker", {
             var that = this;
             var rpc = qr.data.Server.getInstance();
             rpc.callAsyncSmart(function(ret){                
-                ret.forEach(function(item){
-                    that.addReservation(new qr.data.Reservation(ret))
+                ret.forEach(function(resv){
+                    that.addReservation(new qr.data.Reservation(resv))
                 });
                 that.setEnabled(true);
-            },'getCalendarDay',newDate.getTime()/1000);
+            },'getCalendarDay',Date.UTC(newDate.getUTCFullYear(),newDate.getUTCMonth(),newDate.getUTCDate(),0,0,0)/1000);
         }
     }
 });

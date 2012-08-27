@@ -208,7 +208,7 @@ our $TABLES = {
                 sql => 'NOT NULL REFERENCES addr',
             },  
             start => {
-                type => 'DATETIME',
+                type => 'NUMERIC',
             },  
             len => {
                 type => 'NUMERIC',
@@ -283,6 +283,31 @@ sub _ensureTables {
         push @SQL, $def->{sql} if $def->{sql};
         $dbh->do("CREATE TABLE IF NOT EXISTS $tab ( ".join(",\n",@SQL)." )");
     }
+    $dbh->do(<<SQL_END);
+CREATE TRIGGER IF NOT EXISTS resv_insert_check 
+BEFORE INSERT ON resv 
+FOR EACH ROW WHEN
+   EXISTS ( SELECT resv_id FROM resv
+   WHERE new.resv_room = resv_room
+     AND new.resv_start < resv_start + resv_len * 3600
+     AND resv_start < new.resv_start + new.resv_len * 3600 )
+BEGIN
+   SELECT RAISE ( ABORT, 'can not insert overlapping reservations entries');
+END
+SQL_END
+    $dbh->do(<<SQL_END);
+CREATE TRIGGER IF NOT EXISTS resv_update_check 
+BEFORE UPDATE OF resv_room,resv_start,resv_len ON resv 
+FOR EACH ROW WHEN
+   EXISTS ( SELECT resv_id FROM resv
+    WHERE resv_id != new.resv_id
+      AND new.resv_room = resv_room
+      AND new.resv_start < resv_start + resv_len * 3600
+      AND resv_start < new.resv_start + new.resv_len * 3600 )
+BEGIN
+   SELECT RAISE ( ABORT, 'this change would cause overlapping reservations entries');
+END
+SQL_END
 }
 
 sub new {
@@ -524,33 +549,26 @@ Returns the list of reservations for the given day (UTC). The date is to be give
 
 sub getCalendarDay {
     my $self = shift;
-    my $date = strftime('%Y-%m-%d',gmtime(shift));
+    my $date = int(shift);
     my $dbh = $self->dbh;
     my $resArray = $dbh->selectall_arrayref(<<SQL_END,{ Slice => {}},$date);
-SELECT resv_id,
-       resv_room,
-       date(resv_start,'utc') AS date,
-       strftime('%H',resv_start,'utc') AS start,
-       resv_len,
-       resv_pub,
-       resv_subj,
-       resv_addr
-  FROM resv 
-  WHERE date(resv_start,'utc') = ?
+SELECT
+    resv_id,
+    resv_room,
+    resv_start,
+    resv_len,
+    resv_pub,
+    resv_subj,
+    resv_addr
+  FROM resv
+  WHERE resv_start < CAST(?1 AS INTEGER)  + 24 * 3600 AND 3600 * resv_len + resv_start > CAST(?1 AS INTEGER)
 SQL_END
     my @ret;
     my $addrId = $self->addrId;
     for my $res (@$resArray){
         my $mine = $res->{resv_addr} ~~ $addrId;
-        push @ret, {
-            resvId => $res->{resv_id},
-            roomId => $res->{resv_room},
-            startDate => $res->{date},
-            startHr => $res->{start},
-            duration => $res->{resv_len},
-            subject => ( $res->{resv_pub} or $mine ) ? $res->{resv_subj} : undef,
-            editable => $mine
-        }
+        $res->{resv_subj} = ( $res->{resv_pub} or $mine ) ? $res->{resv_subj} : undef;
+        push @ret, $res;
     }
     return \@ret;
 }
@@ -774,17 +792,20 @@ sub putEntry {
     my @keys = sort keys %$rec;
     if ($recId){
         my @setValues;
-        my $sqlSet = join ", ", map {
+        my $sqlSet = 'SET '.join(", ", map {
             push @setValues, $rec->{$_};
-            "SET ".$dbh->quote_identifier($_)." = ?"
-        } @keys;
+            $dbh->quote_identifier($_)." = ?"
+        } @keys);
         if ($extra){
             $sqlSet .= ", $extraQ = ?";
             push @setValues, $self->json->encode($extra);
         }
-        $dbh->do(<<SQL_END,{},@setValues,$recId);
+        my $count = $dbh->do(<<SQL_END,{},@setValues,$recId);
 UPDATE $tableQ $sqlSet WHERE $recIdQ = ?
 SQL_END
+        if ($count != 1){
+            die mkerror(3993,"wanted to update one record in $tableQ, succeded in updating $count");
+        }
     }
     else {
         my @setValues;
@@ -795,9 +816,12 @@ SQL_END
         my $placeholders = join ", ", map { '?' } @keys;
         my @values = map { $rec->{$_} } @keys;
             
-        $dbh->do(<<SQL_END,{},@values,$extra);
+        my $count = $dbh->do(<<SQL_END,{},@values,$extra);
 INSERT INTO $tableQ ($keys) VALUES ( $placeholders )
 SQL_END
+        if ($count != 1){
+            die mkerror(3993,"wanted to insert one record in $tableQ, succeded in inserting $count");
+        }
         $recId = $dbh->last_insert_id("","","","");
     }
     return $recId;
@@ -883,8 +907,7 @@ SQL_END
             return ($dbh->selectrow_array(<<SQL_END,{},$self->addrId))[0];
 SELECT COUNT(*)
   FROM resv
-  JOIN adus ON ( resv_adus = adus_id )
-  WHERE adus_addr = ?
+  WHERE resv_addr = ?
 SQL_END
         }
         when ('acct'){
@@ -943,10 +966,8 @@ SQL_END
         }
         when ('resv'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
-SELECT resv_id, resv_room, resv_start,resv_len,resv_price,resv_subj,resv_extra,user_email
+SELECT resv_id, resv_room, datetime(resv_start) as resv_start, resv_len,resv_price,resv_subj,resv_extra
   FROM resv
-  JOIN adus ON ( resv_adus = adus_id )
-  JOIN user ON ( adus_user = user_id )
   WHERE resv_addr = ?
   $ORDER
   LIMIT ? OFFSET ?

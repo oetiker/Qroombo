@@ -12,10 +12,12 @@
 
 qx.Class.define('qr.data.Reservation', {
     extend : qx.core.Object,
-    construct: function(set){
+    construct: function(resv){
         this.base(arguments);
-        this.set(set);
         this._cfg = qr.data.Config.getInstance();
+        if (resv){
+            this.setResvRecord(resv);
+        }
     },
     properties : {
         /**
@@ -81,6 +83,19 @@ qx.Class.define('qr.data.Reservation', {
                 return 0;
             }
             return end - this.getStartHr();
+        },
+        setResvRecord: function(rec){
+            var date = new Date(parseInt(rec.resv_start)*1000);
+            this.set({
+                startDate: new Date(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate(),0,0,0),
+                startHr:   date.getUTCHours(),
+                duration:  parseInt(rec.resv_len),
+                subject:   rec.resv_subj || '-',
+                roomId:    rec.resv_room,
+                resvId:    rec.resv_id,
+                editable:  rec.resv_addr == this._cfg.getAddrId()
+            });
+            return this;
         }
     }
 });
