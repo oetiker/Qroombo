@@ -218,7 +218,7 @@ qx.Class.define("qr.ui.AutoForm", {
                         model[setter](String(value));
                         break;
                     case 'bool':
-                        model[setter](parseInt(value) != 0);
+                        model[setter](qx.lang.Type.isBoolean(value) ? value : parseInt(value) != 0);
                         break;
                     case 'date':
                         model[setter](new Date(value));
@@ -240,7 +240,7 @@ qx.Class.define("qr.ui.AutoForm", {
             var data = {};
             for (var key in props){
                 var getter = 'get'+qx.lang.String.firstUp(key);
-                data[key] = model[getter](data[key]);
+                data[key] = model[getter]();
             }
             return data;
         }

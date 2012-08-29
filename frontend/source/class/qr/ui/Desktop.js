@@ -15,13 +15,8 @@ qx.Class.define("qr.ui.Desktop", {
         var cfg = this._cfg = qr.data.Config.getInstance();
         this._populate();        
         this._tabs.booker.setEnabled(true);
-        var user = this._userInfo = new qx.ui.basic.Label();
-        this.getApplicationRoot().add(user, {
-             top   : 8,
-             right : 8
-        });     
         this._openShop();
-        cfg.addListener('userChanged',this._openShop,this);
+        cfg.addListener('changeUserId',this._openShop,this);
     },
     properties: {
     },
@@ -36,19 +31,16 @@ qx.Class.define("qr.ui.Desktop", {
         _openShop: function(){
             var userId = this._cfg.getUserId();
             var enabled = (userId != null);
-            ['res','acct','contact','addr'].forEach(function(t){
+            ['res','acct','user','addr'].forEach(function(t){
                 this._tabs[t].setEnabled(enabled);
             },this);
-            if (userId){
-                this._userInfo.setValue(this._cfg.getUserName());
-            }
         },
         _populate: function(){
             var tabs = this._tabs = {};
             [{ k: 'booker',  l: this.tr('Booker')},
              { k: 'res',     l: this.tr('Reservations')},
              { k: 'acct',    l: this.tr('Accounting')},
-             { k: 'contact', l: this.tr('Contact Information')},
+             { k: 'user',    l: this.tr('User Data')},
              { k: 'addr',    l: this.tr('Invoice Addresses')}
             ].forEach(function(cfg){
                 var page = tabs[cfg.k] = new qx.ui.tabview.Page(cfg.l).set({
@@ -60,7 +52,7 @@ qx.Class.define("qr.ui.Desktop", {
             tabs.booker.add(qr.ui.Navigator.getInstance());
             tabs.res.add(qr.ui.ReservationTable.getInstance());
             tabs.acct.add(qr.ui.AccountingTable.getInstance());
-            tabs.contact.add(qr.ui.ContactTable.getInstance());
+            tabs.user.add(qr.ui.ContactTable.getInstance());
             tabs.addr.add(qr.ui.AddressTable.getInstance());
         }
     }    

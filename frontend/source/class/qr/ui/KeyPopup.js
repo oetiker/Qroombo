@@ -40,7 +40,9 @@ qx.Class.define("qr.ui.KeyPopup", {
             }); 
         },
         _addForm: function(cfg){
-            this.add(this._mkHeader(this.tr('You Access Key has just been sent to the eMail address you provided in the previous dialog. Please enter the Access Key in the field below.')));
+            this.add(new qx.ui.basic.Label(this.tr('You Access Key has just been sent to the eMail address you provided in the previous dialog. Please enter the Access Key in the field below.')).set({
+                rich: true
+            }));
             var keyForm =  new qr.ui.AutoForm([
                 {
                     key: 'key',
@@ -88,11 +90,12 @@ qx.Class.define("qr.ui.KeyPopup", {
                 }
                 rpc.callAsyncSmart(function(ret){
                     that.close();
+                    var cfg = qr.data.Config.getInstance();
+                    cfg.setAddrList(ret.addrs);
+                    cfg.setUserData(ret.user);
+                    qr.ui.Booker.getInstance().reload();
                     that.getApplicationRoot().remove(that);
                     that.dispose();
-                    var cfg = qr.data.Config.getInstance();
-                    cfg.setUserData(ret.user);
-                    cfg.setAddrList(ret.addrs);
                 },'login',cfg.eMail,keyData.key,userData,addrData);
             },this);
         }

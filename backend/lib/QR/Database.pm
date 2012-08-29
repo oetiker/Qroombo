@@ -151,7 +151,7 @@ our $TABLES = {
         },
     },
     addr => {
-        fields => [qw(org contact addr zip town cntry extra)],
+        fields => [qw(org contact str zip town cntry extra)],
         conf => {
             org => {
                 label => 'Organization',
@@ -160,7 +160,7 @@ our $TABLES = {
             contact => {
                 label => 'Contact Name',
             },
-            addr => {
+            str => {
                 label => 'Address',
             },
             zip => {
@@ -201,7 +201,7 @@ our $TABLES = {
         sql => 'CONSTRAINT adus_unique UNIQUE(adus_addr,adus_user)'
     },
     resv => {
-        fields => [qw(addr room start len pub price subj extra)],
+        fields => [qw(addr subj room start len pub price extra)],
         conf => {
             addr => {
                 type => 'INTEGER',
@@ -217,6 +217,7 @@ our $TABLES = {
                 type => 'BOOL',            
                 label => 'Publish',
                 widget => 'checkBox',
+                opt => 1,
                 set => {
                    label => 'Show Subject in Calendar'
                 }

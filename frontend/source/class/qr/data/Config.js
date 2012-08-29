@@ -16,16 +16,18 @@ qx.Class.define('qr.data.Config', {
     type : 'singleton', 
     properties: {
         userId: {
-            event: 'userChanged',
-            init: null
+            event: 'changeUserId',
+            init: null,
+            nullable: true
         },
         addrId: {
-            event: 'addrChanged',
+            event: 'changeAddrId',
             init: null,
+            nullable: true,
             apply: '_onAddrIdChange'
         },
         addrList: {
-            event: 'addrListChanged',
+            event: 'changeAddrList',
             init: []
         }
     },
@@ -47,6 +49,7 @@ qx.Class.define('qr.data.Config', {
             }
             if (data.addrs && data.addrs.length > 0){
                 this.setAddrList(data.addrs);
+                this.setAddrId(data.user.user_addr);
             }
         },
         getCurrency: function(){
@@ -64,12 +67,46 @@ qx.Class.define('qr.data.Config', {
         getLastHour: function(){
             return this._cfg.reservation.last_hour;
         },
+        clearUserData: function(){
+            this.setAddrId(null);
+            this.setAddrList([]);
+            this._userData = null;
+            this.setUserId(null);
+        },
         setUserData: function(data){
             this._userData = data;
             this.setUserId(data.user_id);
+            this.setAddrId(data.user_addr);
         },
         getUserName: function(){
-            return this._userData.user_first + ' ' + this._userData.user_last;
+            var uD = this._userData;
+            if (!uD){
+                return null;
+            }
+            return uD.user_first + ' ' + uD.user_last;
+        },
+        getUserAddr: function(){
+            var aI = this.getAddrId();
+            if (!aI){
+                return null;
+            }
+            var aL = this.getAddrList();
+            var ret = this.getUserName();
+            if (aL.length == 1){
+                return ret;
+            };
+            aL.forEach(function(ad){
+                if ( ad.addr_id == aI){
+                    if (ad.addr_org){
+                        ret += ' / '+ ad.addr_org
+                    }
+                    else {
+                        ret += ' / '+ ad.addr_str
+                    }
+                    ret += ', '+ad.addr_town
+                }
+            });
+            return ret;
         }
     }   
 });

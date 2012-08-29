@@ -45,9 +45,7 @@ qx.Class.define("qr.Application", {
                  in config to ask for addr choice if multiple addresses are
                  on offer 
                  **/
-                qr.ui.AddrPickPopup.getInstance();
                 qr.data.Config.getInstance().setConfig(ret);
-                qr.ui.ReservationPopup.getInstance();
                 var desktop = qr.ui.Desktop.getInstance();        
                 root.add(desktop, {
                     left   : 10,
@@ -55,6 +53,10 @@ qx.Class.define("qr.Application", {
                     bottom : 10,
                     right  : 10
                 });
+                root.add(qr.ui.IdentityButton.getInstance(), {
+                    top   : 10,
+                    right : 10
+                });     
             },'getConfig');
 
         }

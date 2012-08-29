@@ -160,7 +160,7 @@ qx.Class.define("qr.ui.Booker", {
             var start = this._cfg.getFirstHour();
             var end = this._cfg.getLastHour();
             for (var hour=start,col=1;hour<end;col++,hour++){
-                var cl =  this._mkCell(String(hour),'background');
+                var cl =  this._mkCell(String(hour)+' - '+String(hour+1),'background');
                 cl.setTextAlign('center');
                 that._colWgt.push(cl);                
                 grid._add(cl,{row: 0,column: col});
@@ -177,11 +177,11 @@ qx.Class.define("qr.ui.Booker", {
         },
         _mkCell: function(text,bgColor){
             var cell = new qx.ui.basic.Label().set({
-                padding: [3,3,3,3],
                 allowGrowX: true,
                 allowGrowY: true,
-                allowShrinkY: true,
-                minHeight: 25
+                minWidth: 50,
+                paddingTop: 2,
+                paddingBottom: 2
             });
             if (bgColor){
                 cell.setBackgroundColor(bgColor);
@@ -222,19 +222,26 @@ qx.Class.define("qr.ui.Booker", {
             },this);
 
             var resDialog = qr.ui.ReservationPopup.getInstance();
+            var cfg = qr.data.Config.getInstance();
             this.addListener('mouseup',function(e){
                 if (down){
                     down = false;
-                    resDialog.addListenerOnce('close',function(){
-                        this.fireEvent('cleardrag');
-                    },this);
-                    resDialog.show(new qr.data.Reservation().set({
-                        startDate: this.getDate(),
-                        startHr: begin,
-                        duration: len,
-                        roomId: this._rowToRoomId[start.row],
-                        editable: true
-                    }));
+                    if (cfg.getAddrId()){
+                        resDialog.addListenerOnce('close',function(){
+                            this.fireEvent('cleardrag');                                                        
+                        },this);
+                        resDialog.show(new qr.data.Reservation().set({
+                            startDate: this.getDate(),
+                            startHr: begin,
+                            duration: len,
+                            roomId: this._rowToRoomId[start.row],
+                            editable: true
+                        }));
+                    }
+                    else {
+                        qr.ui.LoginPopup.getInstance().show();
+                        this.fireEvent('cleardrag');                                                
+                    }
                 }            
             },this);
             

@@ -30,18 +30,20 @@ qx.Class.define("qr.ui.ReservationPopup", {
             modal: true
         });
         var cfg = this._cfg = qr.data.Config.getInstance();
-        cfg.addListener('addrChanged',this._updateForm,this);
+        cfg.addListener('changeAddrId',this._updateForm,this);
         this.addListener('appear',function(){this.center()},this);
         // ok now we open for real as we are now authenticated
+        this._updateForm();
         this._populateForm();
     },
     properties: {
         reservation: {
-            event: 'reservationChanged',
+            event: 'changeReservation',
             init: null
         }
     },
     events: {
+        changeForm: 'qx.event.type.Event'
     },
     members : {
         _cfg: null,
@@ -50,18 +52,26 @@ qx.Class.define("qr.ui.ReservationPopup", {
         show: function(reservation){
             var addrId = this._cfg.getAddrId();
             if (!addrId){
-                this._cfg.addListenerOnce('addrChanged',function(){
-                    this.show(reservation);
-                },this);
-                var login = new qr.ui.LoginPopup();
-                login.show();
                 return;
             }
-            this.setReservation(reservation);
-            this.base(arguments);            
+            if (this._form){
+                this.setReservation(reservation);
+                this.base(arguments);            
+            }
+            else {
+                this.addListenerOnce('changeForm',function(){
+                    this.setReservation(reservation);
+                    this.base(arguments);            
+                },this)
+            }                
         },
-        _updateForm: function(){
-            var rpc = qr.data.Server.getInstance();
+        _updateForm: function(e){
+            /* skip if the addr id did not really change */
+            var addrId = e && e.getData() || qr.data.Config.getInstance().getAddrId();
+            if (this._lastAddrId == addrId){
+                return;
+            }
+            this._lastAddrId = addrId;
             var that = this;
             this.setEnabled(false);
             var currencyFormat = new qx.util.format.NumberFormat().set({
@@ -69,11 +79,13 @@ qx.Class.define("qr.ui.ReservationPopup", {
                 minimumFractionDigits: 2,
                 prefix: qr.data.Config.getInstance().getCurrency()+' '
             });
+            if (that._form){
+                that.remove(that._form);
+                that._form.dispose();
+                that._form = null;
+            }
+            var rpc = qr.data.Server.getInstance();
             rpc.callAsyncSmart(function(form){
-                if (that._form){
-                    that.remove(that._form);
-                    that._form.dispose();
-                }
                 that._form = new qr.ui.AutoForm(form,new qx.ui.layout.VBox(5));
                 that.addAt(that._form,0);
                 that.setEnabled(true);
@@ -83,13 +95,15 @@ qx.Class.define("qr.ui.ReservationPopup", {
                         return;
                     }
                     hold = true;
-                    var resvForm = e.getData();
+                    var resvForm = that._form.getData();
                     rpc.callAsyncSmart(function(price){
                         that._form.setData({resv_price: currencyFormat.format(price)});
                         hold = false;
                     },'getPrice',that._mkResv(resvForm));
                 };
-                that._form.addListener('changeData',updatePrice,that);
+                that._form.addListener('changeData',updatePrice,that);                
+                that.fireEvent('changeForm');
+//                updatePrice();
             },'getForm','resv');
 
         },
@@ -136,47 +150,49 @@ qx.Class.define("qr.ui.ReservationPopup", {
                 },'putEntry','resv',this.getReservation().getResvId(),this._mkResv(data));
             },this);
 
-            this.addListener('reservationChanged',function(e){
+            this.addListener('changeReservation',function(e){
                 var resv = e.getData();
                 var resvId = resv.getResvId();
                 deleteButton.setVisibility( resvId ? 'visible' : 'hidden' );
-                var form = this._form;
-                form.reset();
                 that._resv = null;
                 if (resvId){
                     this.setEnabled(false);
                     rpc.callAsyncSmart(function(data){
                         that._resv = data;
-                        form.setData(data,true); /* only set fields that are available */
+                        that._form.setData(data,true); /* only set fields that are available */
                         that.setEnabled(true);
                     },'getEntry','resv',resvId);
                 }
                 else {
-                    form.setData({resv_price: ''});
+                    /* triger the price evaluator */
+                    that._form.setData('resv_price','go go');
                 }
-
             },this);
             this.add(row);
         },
         _mkResv: function(resv){
             var resvObj = this.getReservation();
             var resvRec = this._resv;
+            var ret = {};
             if (! resvRec ){
                 var date = resvObj.getStartDate();
                 var start = Date.UTC(
                     date.getFullYear(),date.getMonth(),date.getDate(),
                     resvObj.getStartHr(),0,0,0
                 );
-                resv.resv_start = start/1000;
-                resv.resv_len = resvObj.getDuration();
-                resv.resv_room = resvObj.getRoomId();
+                ret.resv_start = start/1000;
+                ret.resv_len = resvObj.getDuration();
+                ret.resv_room = resvObj.getRoomId();
             }
             else {
                 for (var key in resvRec){
-                    resv[key] = resvRec[key];
+                    ret[key] = resvRec[key];
                 }
             }
-            return resv;    
+            for (var key in resv){
+                ret[key] = resv[key];
+            }
+            return ret;    
         }
     }    
 });

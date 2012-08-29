@@ -6,6 +6,8 @@
 ************************************************************************ */
 /*
 #asset(qx/icon/${qx.icontheme}/32/apps/office-calendar.png)
+#asset(qx/icon/${qx.icontheme}/32/actions/go-next.png)
+#asset(qx/icon/${qx.icontheme}/32/actions/go-previous.png)
 */
 /**
   * Booking Navigator
@@ -36,16 +38,27 @@ qx.Class.define("qr.ui.Navigator", {
             calBtn.addListener('appear',function(e){
                 calPop.show();
             },this);
+            var booker =  this.getChildControl('booker');
+            var chooser = this.__chooser;
+            this.getChildControl('next-button').addListener('execute',function(){
+                var date = new Date(chooser.getValue());
+                date.setDate(date.getDate()+1);
+                chooser.setValue(date);
+            },this);
+            this.getChildControl('prev-button').addListener('execute',function(){
+                var date = new Date(chooser.getValue());
+                date.setDate(date.getDate()-1);
+                chooser.setValue(date);
+            },this);
 
             // title updater
             var dateFormat = new qx.util.format.DateFormat(this.tr("EEEE, d. LLLL yyyy"));
-
-            this.__chooser.addListener('changeValue',function(e){
+            chooser.addListener('changeValue',function(e){
                 var date = e.getData();
-                this.getChildControl('title').setLabel(dateFormat.format(date));
-                this.getChildControl('booker').setDate(date);
+                this.getChildControl('title').setValue(dateFormat.format(date));
+                booker.setDate(date);
                 calPop.hide();
-            },this);
+            },this);            
 
         },
         _createChildControlImpl : function(id,hash) {
@@ -53,19 +66,32 @@ qx.Class.define("qr.ui.Navigator", {
 
             switch(id) {
                 case "title-bar":
-                    control = new qx.ui.container.Composite(new qx.ui.layout.HBox(10));
+                    var grid = new qx.ui.layout.Grid();
+                    grid.setColumnFlex(1,1);
+                    control = new qx.ui.core.Widget();
+                    control._setLayout(grid);
                     this._addAt(control,0);
                     break;
                 case "title-datechooser-button":
                     control =  new qx.ui.form.Button(null,"icon/32/apps/office-calendar.png");
-                    this.getChildControl('title-bar')._addAt(control,0);
+                    this.getChildControl('title-bar')._add(control,{row:0, column: 0});
+                    break;
+                case "prev-button":
+                    control =  new qx.ui.form.Button(null,"icon/32/actions/go-previous.png");
+                    this.getChildControl('title-bar')._add(control,{row:0, column: 2});
+                    break;
+                case "next-button":
+                    control =  new qx.ui.form.Button(null,"icon/32/actions/go-next.png");
+                    this.getChildControl('title-bar')._add(control,{row:0, column:3});
                     break;
                 case "title":
-                    control =  new qx.ui.basic.Atom().set({
-                        center: true,   
-                        font: 'headline'
+                    control =  new qx.ui.basic.Label().set({
+                        font: 'headline',
+                        alignY: 'middle',
+                        alignX: 'left',
+                        paddingLeft: 20
                     });
-                    this.getChildControl('title-bar')._addAt(control,1);
+                    this.getChildControl('title-bar')._add(control,{row:0, column:1});
                     break;
                 case "booker":
                     control =  qr.ui.Booker.getInstance();

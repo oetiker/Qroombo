@@ -33,6 +33,7 @@ our %allow = (
     getCalendarDay => 1,
     getConfig => 1,
     login => 1,
+    logout => 1,
     sendKey => 1,
     getForm => 1,
     getPrice => 1,
@@ -79,8 +80,6 @@ sub getConfig {
     my $ret = {
         cfg => {
             reservation => $cfg->{RESERVATION},
-            user => $cfg->{USER},
-            address => $cfg->{ADDRESS},
             room => $cfg->{ROOM},
             general => {
                 title => $cfg->{GENERAL}{title},
@@ -152,11 +151,28 @@ sub login {
     my $adminMode = $self->config->cfg->{GENERAL}{admin}{$email};
     $self->controller->session('adminMode', $adminMode);
     $db->adminMode($adminMode);
+    my $user = $db->getEntry('user',$userId);
+    $self->setAddrId($user->{user_addr});
     return {
-        user => $db->getEntry('user',$userId),
+        user => $user,
         addrs => $db->getRows('addr',1000,0)
     }
 }
+
+=head2 logout()
+
+remove the session authorization from the client
+
+=cut
+
+sub logout {
+    my $self = shift;
+    $self->controller->session('adminMode',undef);
+    $self->controller->session('userId',undef);
+    $self->controller->session('addrId',undef);
+    return 1;
+}
+
 
 =head2 setAddrId(addrId)
 

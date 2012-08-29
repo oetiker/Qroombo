@@ -12,6 +12,7 @@
   */
 qx.Class.define("qr.ui.LoginPopup", {
     extend : qx.ui.window.Window,
+    type: 'singleton',
     construct : function() {                
         this.base(arguments,this.tr('Login'));
         this.set({
@@ -27,14 +28,11 @@ qx.Class.define("qr.ui.LoginPopup", {
             modal: true
         });
         
-        this.add(new qx.ui.basic.Label(this.tr('Enter your eMail address and press the Next button below')).set({
+        this.add(new qx.ui.basic.Label(this.tr('You have to login, to make reservations. Enter your eMail address and press the Next button below.')).set({
                 rich: true,
                 paddingTop: 10
         }));            
         this._addForm();
-    },
-    events: {
-        keyRequested: 'qx.event.type.Data'
     },
     members : {
         _addForm: function(){
