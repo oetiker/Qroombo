@@ -96,6 +96,10 @@ qx.Class.define('qr.data.Reservation', {
                 editable:  rec.resv_addr == this._cfg.getAddrId()
             });
             return this;
+        },
+        dateMatch: function(date){
+            var start = this.getStartDate();
+            return date.getFullYear() == start.getFullYear() && date.getMonth() == start.getMonth() && date.getDate() == start.getDate();            
         }
     }
 });

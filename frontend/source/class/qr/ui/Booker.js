@@ -24,6 +24,7 @@ qx.Class.define("qr.ui.Booker", {
         this._occupyMap = {};
         this._rowToRoomId = {};
         this._populate();
+        this._createChildControl('busy');
         this._addMouse();
     },
     properties: {
@@ -60,6 +61,10 @@ qx.Class.define("qr.ui.Booker", {
             this._occupyMap = {};
         },
         addReservation: function(reservation){
+            var bookerDate = this.getDate().getTime() / 1000;
+            if (!reservation.dateMatch(this.getDate())){
+                return;
+            }
             var marker = this._mkMarker(reservation);
             var overlay = this.getChildControl('overlay');
             var row = reservation.getRow();
@@ -127,9 +132,29 @@ qx.Class.define("qr.ui.Booker", {
             return marker;
         },
         _createChildControlImpl : function(id) {
-            var control =  new qx.ui.core.Widget();
-            var grid = new qx.ui.layout.Grid(1,1);
-            control._setLayout(grid);
+            var control;
+            switch (id){
+                case 'grid':
+                case 'overlay':
+                    control =  new qx.ui.core.Widget();
+                    var grid = new qx.ui.layout.Grid(1,1);
+                    control._setLayout(grid);
+                    break;
+                case 'busy':
+                    control = new qx.ui.basic.Atom(this.tr('loading calendar ...'), "qr/loader.gif").set({
+                        visibility      : 'hidden',
+                        backgroundColor : '#ffffff',
+                        textColor       : '#bfbfbf',
+                        allowGrowX      : true,
+                        allowGrowY      : true,
+                        allowShrinkX    : true,
+                        allowShrinkY    : true,
+                        alignX          : 'center',
+                        alignY          : 'middle',
+                        center          : true
+                    });
+                    break;                            
+            }    
             this._add(control,{left:0,top:0,right:0,bottom:0});
             return control || this.base(arguments, id);
         },            
@@ -304,14 +329,16 @@ qx.Class.define("qr.ui.Booker", {
         },
         _applyDate: function(newDate,oldDate){
             this.clearReservations();
-            this.setEnabled(false);
+            var busy = this.getChildControl('busy');
+            var timer = qx.event.Timer.once(function(){busy.show()},this,1000);
             var that = this;
             var rpc = qr.data.Server.getInstance();
-            rpc.callAsyncSmart(function(ret){                
+            rpc.callAsyncSmart(function(ret){
                 ret.forEach(function(resv){
                     that.addReservation(new qr.data.Reservation(resv))
                 });
-                that.setEnabled(true);
+                timer.stop();
+                busy.hide();
             },'getCalendarDay',Date.UTC(newDate.getUTCFullYear(),newDate.getUTCMonth(),newDate.getUTCDate(),0,0,0)/1000);
         }
     }
