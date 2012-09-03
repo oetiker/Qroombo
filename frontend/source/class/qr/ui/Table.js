@@ -12,6 +12,8 @@
  */
 qx.Class.define("qr.ui.Table", {
     extend : qx.ui.table.Table,
+
+
     /**
      * @param tm {qx.ui.table.Model} table model
      * @param widths {Array} relative column widths
@@ -24,14 +26,16 @@ qx.Class.define("qr.ui.Table", {
         };
 
         this.base(arguments, tm, tableOpts);
-        this.set({ 
+
+        this.set({
             showCellFocusIndicator : false,
-            statusBarVisible: false 
+            statusBarVisible       : false
         });
-        
+
         // hide the first column as it contains the internal
         // id of the node
         var tcm = this.getTableColumnModel();
+
         if (widths) {
             var resizeBehavior = tcm.getBehavior();
 

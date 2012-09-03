@@ -10,12 +10,12 @@
 
 qx.Theme.define("qr.theme.Font", {
     extend : qx.theme.indigo.Font,
-    fonts  : {
-            "headline" :
-        {
-          size : 24,
-          family : ["sans-serif", "arial"],
-          bold: true
+
+    fonts : {
+        "headline" : {
+            size   : 24,
+            family : [ "sans-serif", "arial" ],
+            bold   : true
         }
     }
 });

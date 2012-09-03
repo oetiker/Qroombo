@@ -98,9 +98,10 @@ qx.Class.define("qr.ui.MsgBox", {
         }, this);
 
         box.add(btn_ok);
-        this.addListener('appear',function(){
+
+        this.addListener('appear', function() {
             this.center();
-        },this)
+        }, this);
     },
 
     members : {
@@ -115,7 +116,6 @@ qx.Class.define("qr.ui.MsgBox", {
          *
          * @param titel {String} window title
          * @param text {String} contents
-         * @return {void} 
          */
         __open : function(titel, text) {
             this.setCaption(String(titel));
@@ -148,7 +148,6 @@ qx.Class.define("qr.ui.MsgBox", {
          *
          * @param titel {String} title
          * @param text {String} body
-         * @return {void} 
          */
         error : function(titel, text) {
             this.__body.setIcon("icon/32/status/dialog-error.png");
@@ -165,7 +164,6 @@ qx.Class.define("qr.ui.MsgBox", {
          * Show server error message
          *
          * @param exc {Map} callAsync exception
-         * @return {void} 
          */
         exc : function(exc) {
             this.__body.setIcon("icon/32/status/dialog-error.png");
@@ -188,7 +186,6 @@ qx.Class.define("qr.ui.MsgBox", {
          *
          * @param titel {String} title
          * @param text {String} body
-         * @return {void} 
          */
         info : function(titel, text) {
             this.__body.setIcon("icon/32/status/dialog-information.png");
@@ -207,16 +204,17 @@ qx.Class.define("qr.ui.MsgBox", {
          * @param titel {String} window title
          * @param text {String} content
          * @param exec_action {Function} callback to run when the apply button is pressed
-         * @return {void} 
          */
         warn : function(titel, text, exec_action) {
             this.__body.setIcon("icon/32/status/dialog-warning.png");
             this.setIcon("icon/16/status/dialog-warning.png");
-            if (exec_action){
+
+            if (exec_action) {
                 this.__btn_ok.setVisibility('excluded');
                 this.__btn_cnl.setVisibility('visible');
                 this.__btn_app.setVisibility('visible');
                 var listener = this.__btn_app.addListenerOnce("execute", exec_action);
+
                 this.addListenerOnce('close', function() {
                     this.removeListenerById(listener);
                 }, this);
@@ -226,6 +224,7 @@ qx.Class.define("qr.ui.MsgBox", {
                 this.__btn_cnl.setVisibility('excluded');
                 this.__btn_ok.setVisibility('visible');
             }
+
             this.__open(titel, text);
         }
     }

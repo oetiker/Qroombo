@@ -11,6 +11,8 @@
  */
 qx.Class.define('qr.data.RemoteTableModel', {
     extend : qx.ui.table.model.Remote,
+
+
     /**
      * Create an instance of the remote table model.
      */
@@ -30,39 +32,38 @@ qx.Class.define('qr.data.RemoteTableModel', {
     },
 
     members : {
-        __view: null,
+        __view : null,
+
+
         /**
          * Provid our implementation to make remote table work
          *
-         * @return {void} 
          */
         _loadRowCount : function() {
             var rpc = qr.data.Server.getInstance();
             var that = this;
             that._onRowCountLoaded(5);
-/*            rpc.callAsync(function(ret, exc) {
-                if (exc) {
-                    qr.ui.MsgBox.getInstance().exc(exc);
-                    ret = 0;
-                }
-
-                // call this even when we had issues from
-                // remote. without it the remote table gets its
-                // undies in a twist.
-                that._onRowCountLoaded(ret);
-            },
-            'getRowCount', this.__view,this.getSearch());
-*/
-
         },
 
+        /*            rpc.callAsync(function(ret, exc) {
+                        if (exc) {
+                            qr.ui.MsgBox.getInstance().exc(exc);
+                            ret = 0;
+                        }
+        
+                        // call this even when we had issues from
+                        // remote. without it the remote table gets its
+                        // undies in a twist.
+                        that._onRowCountLoaded(ret);
+                    },
+                    'getRowCount', this.__view,this.getSearch());
+        */
 
         /**
          * Reload the table data when the search string changes
          *
          * @param newValue {Integer} New TagId
          * @param oldValue {Integer} Old TagId
-         * @return {void} 
          */
         _applySearch : function(newValue, oldValue) {
             if (newValue != oldValue) {
@@ -76,12 +77,15 @@ qx.Class.define('qr.data.RemoteTableModel', {
          *
          * @param firstRow {Integer} first row to load
          * @param lastRow {Integer} last row to load
-         * @return {void} 
          */
         _loadRowData : function(firstRow, lastRow) {
             var rpc = qr.data.Server.getInstance();
             var that = this;
             that._onRowDataLoaded({});
+        }
+    }
+});
+
 /*            
             rpc.callAsync(function(ret, exc) {
                 if (exc) {
@@ -96,6 +100,3 @@ qx.Class.define('qr.data.RemoteTableModel', {
             },
             'getRows', this.__view, this.getSearch(), lastRow - firstRow + 1, firstRow);
 */
-        }
-    }
-});
