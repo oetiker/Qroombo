@@ -30,14 +30,8 @@ qx.Class.define("qr.ui.AccountingTable", {
         tb._add(new qx.ui.core.Spacer(1), { flex : 1 });
         var balance = new qx.ui.basic.Atom(this.tr('Balance: %1 CHF', 0)).set({ center : true }).set({ font : 'headline' });
         tb._add(balance);
-        var model = new qr.data.RemoteTableModel('accounting');
 
-        model.setColumns([ this.tr('AcctId'), this.tr('Date'), this.tr('Remark'), this.tr('User'), this.tr('ResId'), this.tr('Amount') ],
-        [ 'acctid', 'date', 'rem', 'user', 'resid', 'amount' ]);
-
-        var widths = [ 1, 2, 5, 2, 2, 2 ];
-
-        var control = new qr.ui.Table(model, widths);
+        var control = new qr.ui.TabView('acct');
         this._add(control);
     }
 });

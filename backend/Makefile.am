@@ -22,7 +22,7 @@ QX_CLASS = qr
 MJ_CLASS = QR
 MJ_SCRIPT = qr
 
-ETC = etc/qroobo.cfg.dist
+ETC = etc/qroombo.cfg.dist
 BIN = bin/$(MJ_SCRIPT).pl
 
 PM :=  $(shell find lib/ -name "*.pm")

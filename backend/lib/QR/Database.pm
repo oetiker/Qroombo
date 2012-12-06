@@ -120,10 +120,53 @@ sub _connect {
     return $dbh;
 }
 
-our $TABLES = {
+# turn k => [ x => y, ... ] into k=>{x=>y,...},k_order=>[qw(x ...)]
+
+sub _reArrange {
+    my $data = shift;
+    for my $table (keys %$data) {
+        my $t = $data->{$table};
+        for my $key ( keys %$t ) {
+            my $k = $t->{$key};
+            if (ref $k eq 'ARRAY'){
+                $t->{$key} = {};
+                while (@$k) {
+                    my $field = shift @$k;
+                    $t->{$key}{$field} = shift @$k;
+                    push @{$t->{${key}."_order"}}, $field;
+                }                
+            }
+        }
+        # supply default values for labels
+        if ($t->{tabView}){
+            for my $key ( keys $t->{fields} ){
+                next unless $t->{tabView}{$table.'_'.$key};
+                $t->{tabView}{$table.'_'.$key}{label} ||= $t->{fields}{$key}{label};
+            }
+        }
+    }
+    return $data;
+}
+
+our $TABLES = _reArrange {
     user => {
-        fields => [qw(email first last phone extra addr)],
-        conf => {
+        tabView => [
+            user_id => {
+                label => 'ID',
+                width => 2,
+                format => 'number'
+            },
+            user_first => {
+                width => 3
+            },
+            user_last => {
+                width => 3
+            },
+            user_phone => {
+                width => 3
+            }
+        ],
+        fields => [
             email => {
                 label => 'eMail',
                 sql   => 'UNIQUE',
@@ -134,25 +177,47 @@ our $TABLES = {
             },
             first => {
                 label => 'First Name',
+                dbOpt => 1
             },
             last => {
                 label => 'Last Name',
+                dbOpt => 1
             },
             phone => {
                 label => 'Phone',
+                opt => 1
             },
             extra => {
                 opt => 1
             },
             addr => {
                 type => 'INTEGER',
-                opt => 1
+                opt => 1,
+                sql => 'REFERENCES addr',
             }
-        },
+        ]
     },
     addr => {
-        fields => [qw(org contact str zip town cntry extra)],
-        conf => {
+        tabView => [
+            addr_id => {
+                label => 'ID',
+                width => 2,
+                format => 'number',                
+            },
+            addr_contact => {
+                label => 'Contact',
+                width => 4,
+            },
+            addr_org => {
+                label => 'Organization',
+                width => 4
+            },
+            balance => {
+                label => 'Balance',
+                width => 5,
+            },
+        ],
+        fields => [
             org => {
                 label => 'Organization',
                 opt => 1,
@@ -171,16 +236,27 @@ our $TABLES = {
             },
             cntry => {
                 label => 'Country',
-                opt => 1
+                opt => 1,
+            },
+            user => {
+                label => 'Users',
+                virtual => 1,
+                opt => 1,
+                skipNew => 1,
+            },
+            admin => {
+                label => 'Admin Users',
+                virtual => 1,
+                opt => 1,
+                skipNew => 1,
             },
             extra => {
                 opt => 1
-            }
-        },
+            },
+        ],
     },
     adus => {
-        fields => [qw(addr user admin removed)],
-        conf => {
+        fields => [
             addr => {
                 type => 'INTEGER',
                 sql => 'REFERENCES user',
@@ -193,16 +269,40 @@ our $TABLES = {
                 type => 'BOOL',
                 sql => 'DEFAULT FALSE',
             },
-            removed => {
-                type => 'BOOL',
-                sql => 'DEFAULT FALSE',
-            }
-        },
+        ],
         sql => 'CONSTRAINT adus_unique UNIQUE(adus_addr,adus_user)'
     },
     resv => {
-        fields => [qw(addr subj room start len pub price extra)],
-        conf => {
+        tabView => [
+            resv_id => {
+                label => 'ID',
+                width => 1,
+                format => 'number'
+            },
+            resv_room => {
+                width => 3,
+                label => 'Room'
+            },
+            day => {
+                label => 'Date',
+                width => 1
+            },
+            start => {
+                label => 'Start',
+                width => 1
+            },
+            end => {
+                label => 'End',
+                width => 1
+            },
+            resv_price => {
+                width => 1,
+            },
+            resv_subj => {
+                width => 5
+            },
+        ],
+        fields => [
             addr => {
                 type => 'INTEGER',
                 sql => 'NOT NULL REFERENCES addr',
@@ -213,6 +313,7 @@ our $TABLES = {
             len => {
                 type => 'NUMERIC',
             },
+            room => {},
             pub => {
                 type => 'BOOL',            
                 label => 'Publish',
@@ -236,36 +337,61 @@ our $TABLES = {
             extra => {
                 opt => 1
             },    
-        },
+        ],
     },
     acct => {
-        fields => [ qw(addr date subj value resv) ],
-        conf => {
+        tabView => [
+            acct_id => {
+                label => 'ID',
+                width => 1,
+            },
+            date => {
+                label => 'Date',
+                width => 2,
+            },            
+            acct_subj => {
+                width => 2,
+            },
+            acct_value => {
+                width => 1,
+            },                
+        ],
+        fields => [
             addr => {
                 sql => 'REFERENCES addr',
                 type => 'INTEGER',
             },
+            subj => {
+                label => 'Subject',
+            },
             date => {
                 type => 'DATE',
+                label => 'Date',
             },
             value => {
                 type => 'NUMERIC',
+                label => 'Value'
             },
             resv => {
                 type => 'INTEGER',
-                sql => 'REFERENCES resv'
+                sql => 'REFERENCES resv',
+                opt => 1
             },                
-        }
+        ]
     },
     log => {
-        fields => [ qw(date user subj old new) ],
-        conf => {
+        fields => [
             date=> {
                 type => 'DATETIME'
-            }
-        }
+            },
+            user => {},
+            subj => {},
+            old => {},
+            new => {}
+        ]
     }  
 };
+
 # Make sure the tables required by Qroombo exist
 sub _ensureTables {
     my $self = shift;
@@ -273,12 +399,13 @@ sub _ensureTables {
     for my $tab (keys %$TABLES){
         my $def = $TABLES->{$tab};
         my @SQL = ${tab}.'_id INTEGER PRIMARY KEY AUTOINCREMENT';
-        for my $field (@{$def->{fields}}){
-            my $fdef = $def->{conf}{$field} or mkerror(38737,"Definition for $field not found in \%TABLES");
+        for my $field (@{$def->{fields_order}}){
+            my $fdef = $def->{fields}{$field} or mkerror(38737,"Definition for $field not found in \%TABLES");
+            next if $def->{fields}{$field}{virtual};
             push @SQL,
                 $tab.'_'.$field . ' '
               . ( $fdef->{type} || 'TEXT' )
-              . ( $fdef->{opt} ? '' : ' NOT NULL ' )
+              . ( $fdef->{opt} or $fdef->{dbOpt} ? '' : ' NOT NULL ' )
               . ( $fdef->{sql} || '' );
         }
         push @SQL, $def->{sql} if $def->{sql};
@@ -318,9 +445,9 @@ sub new {
     return $self;
 }
 
-=head2 getForm(table)
+=head2 getForm(table,skipNew?)
 
-Return the form description for the given table
+Return the form description for the given table. Ignore items with skipNew if option set.
 
 =cut
 
@@ -328,16 +455,17 @@ Return the form description for the given table
 sub getForm {
     my $self = shift;
     my $table = shift;
-    my $dbh = $self->dbh;
+    my $skipNew = shift;
     my $tableDesc = $TABLES->{$table};
     my $cfg = $self->config->cfg;
     my @desc;
-    my @fields = @{$tableDesc->{fields}};
+    my @fields = @{$tableDesc->{fields_order}};
     my $mode = $self->adminMode ? 'admin' : 'user';
     FIELD:
     for my $field (@fields){
-        my $fdef = $tableDesc->{conf}{$field} || {}; 
+        my $fdef = $tableDesc->{fields}{$field} || {};         
         next unless $fdef->{label};
+        next if $skipNew and $fdef->{skipNew};
         $fdef->{set} ||= {};
         my @readOnly;
         if (my $ac = $fdef->{access}){
@@ -398,17 +526,76 @@ sub getForm {
     return \@desc;
 }
 
+# Make sure the tables required by Qroombo exist
+sub getTableView {
+    my $self = shift;
+    my $table = shift;
+    my $tableDesc = $TABLES->{$table};
+    my $cfg = $self->config->cfg;
+    my @desc;
+    my @fields = @{$tableDesc->{tabView_order}};
+    my @tabFields;
+    my @tabLabels;
+    my @tabWidths;
+    my $mode = $self->adminMode ? 'admin' : 'user';
+    FIELD:
+    for my $field (@fields){
+        my $fdef = $tableDesc->{tabView}{$field} || {};         
+        next unless $fdef->{label};
+        $fdef->{set} ||= {};
+        my @readOnly;
+        if (my $ac = $fdef->{access}){
+            given ($ac->{$mode}){
+                when ('none'){
+                    next FIELD;
+                }
+            }
+        }            
+        push @tabFields, $field;
+        push @tabWidths, $fdef->{width} // 1;
+        push @tabLabels, $fdef->{label} // $field;
+    }
+    my %cfgMap = (
+        user => 'USER',
+        addr => 'ADDRESS',
+        resv => 'RESERVATION'    
+    );
+    if (my $cfgSection = $cfgMap{$table}){
+        EXTRA:
+        for my $extra (@{$self->_getExtraFields($cfgSection)}){
+            my $pos = $extra->{tabViewPos};
+            next unless defined $pos;
+            if (my $ac = $extra->{access}){
+                given ($ac->{$mode}){
+                    when ('none'){
+                        next;   
+                    }
+                }
+            }            
+            splice(@tabFields,$pos,0,$extra->{key});
+            splice(@tabWidths,$pos,0,$extra->{tabViewWidth} // 1);
+            splice(@tabLabels,$pos,0,$extra->{label});
+        };
+    }
+
+    return {
+        fields => \@tabFields,
+        widths => \@tabWidths,
+        labels => \@tabLabels,
+    }
+}
 
 =head2 sendKey(email)
 
-send a authentication key to the given email address
+send a authentication key to the given email address. 
 
 =cut
 
 sub _mkKey {
     my $self = shift;
     my $text = lc shift;
-    my $time = int( time / 3600 / 24); 
+    my $shift = shift || 0; # shift time by x periodes
+    my $time = int( time / 3600 / 24) - $shift; 
     my $dg = Digest->new('SHA-512');
     $dg->add($time,$text,$self->config->cfg->{GENERAL}{secret});
     my $key = $dg->b64digest;
@@ -445,11 +632,12 @@ sub sendKey {
     $sender->SendEnc($body);
     $sender->Close();
     my $user = $self->_getRawEntry('user','user_email',$email);
+   
     return {
         eMail => $email,
         userId => $user->{user_id},
         userForm => $self->getForm('user'),
-        addrForm => $self->getForm('addr')
+        addrForm => $self->getForm('addr',1)
     };
 }
 
@@ -468,7 +656,8 @@ sub login {
     my $userData = shift;
     my $addrData = shift;
     my $realKey = $self->_mkKey($email);
-    die mkerror(3984,"not a valid key provided") unless $userKey ~~ $realKey;
+    my $prevRealKey = $self->_mkKey($email,1);
+    die mkerror(3984,"not a valid key provided") unless $userKey ~~ $realKey or $userKey ~~ $prevRealKey;
     my $userRaw = $self->_getRawEntry('user','user_email',$email);
     my $userId =  $userRaw->{user_id};
     if (not $userId){
@@ -480,7 +669,6 @@ sub login {
                 user_email => $email
             });
             my $addrId = $self->putEntry('addr',undef,$addrData);
-            $self->adminMode(1);
             $self->putEntry('adus',undef,{
                 adus_addr => $addrId,
                 adus_user => $userId,
@@ -687,24 +875,29 @@ sub getEntry {
         when ('addr') {
             my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$recId,$self->userId); 
             if ($self->adminMode or $adus->{adus_id}){
-                my $users = $dbh->selectcol_arrayref(<<SQL_END,{Columns=>[1,2,3]},$recId);
-SELECT user_email,adus_id,adus_admin
+                my $users = $dbh->selectall_arratref(<<SQL_END,{Slice=>{}},$recId);
+SELECT user_email,adus_admin
   FROM adus
   JOIN user ON ( adus_user = user_id )
  WHERE adus_addr = ?
 SQL_END
+                my @userList;
+                my @adminList;
+                for my $u (@$users){
+                    if ($u->{adus_admin}){
+                        push @adminList, $u->{user_email}
+                    }
+                    else {
+                        push @userList, $u->{user_email}
+                    }
+                }            
                 $extra = $self->_extraFilter('ADDRESS',$extra);
+                
                 return {
                     %$extra,                    
                     %$rec,
-                    addr_users =>  { 
-                        map { 
-                            $_->[0] => { 
-                                id=>$_->[1],
-                                admin => $_->[2] 
-                            } 
-                        } @$users
-                    }
+                    adus_admin => join ',',@adminList,
+                    adus_user => join ',',@userList,
                 }
             }
         }
@@ -736,6 +929,35 @@ SQL_END
     }
     die mkerror(39934,'Record acccess permission denied');
 }
+
+=head2 getUserId(email,create?)
+
+figure the userId for an email address. If the create option is set, create a new user entry for the email address.
+
+=cut
+
+sub getUserId {
+    my $self = shift;
+    my $email = shift;
+    my $create = shift;
+    my $dbh = $self->dbh;
+    my $user = $self->_getRawEntry('user','user_email',$email);
+    my $userId = $user->{user_id} or $self->putEntry('user',undef,{user_email => $email});
+    return $userId;
+}
+
+=head2 getAdusMap(addrId)
+
+get the adus records for the given address, keyed by email address
+
+=cut
+
+sub getAdusMap {
+    my $self = shift;
+    my $addrId = shift;
+    my $dbh = $self->dbh;
+    return  $dbh->selectall_hashref('SELECT user_email,* FROM adus JOIN user ON adus_user = user_id WHERE adus_addr = ?','user_email',{Slice=>{}},$addrId);
+}    
 
 =head2 putEntry(table,id,rec)
 
@@ -791,6 +1013,33 @@ sub putEntry {
     my $recIdQ = $dbh->quote_identifier($table.'_id');          
     my $extraQ = $dbh->quote_identifier($table.'_extra');          
     my @keys = sort keys %$rec;
+    if ($table eq 'addr'){
+        my $adus = $self->getAdusMap($recId);
+        if ($rec->{addr_user}){
+            for my $entry ( split /[;,\s]/, $rec->{addr_user} ) { #]]
+                my $rec = $adus->{$entry};
+                $adus->{$entry}{acted} = 1;
+                next if $rec and not $rec->{adus_admin};
+                my $userId = $rec ? $rec->{user_id} : $self->getUserId($entry,1);
+                $self->putEntry('adus',$rec ? $rec->{adus_id} : undef,{adus_user => $userId, adus_admin => 0});
+            }
+            delete $rec->{addr_user};
+        }
+        if ($rec->{addr_admin}){
+            for my $entry ( split /[;,\s]/, $rec->{addr_admin} ) { # ]]
+                my $rec = $adus->{$entry};
+                $adus->{$entry}{acted} = 1;
+                next if $rec and not $rec->{adus_admin};
+                my $userId = $rec ? $rec->{user_id} : $self->getUserId($entry,1);
+                $self->putEntry('adus',$rec ? $rec->{adus_id} : undef,{adus_user => $userId, adus_admin => 1});
+            }
+            delete $rec->{addr_admin};
+        }
+        for my $key (keys %$adus){
+            next if $adus->{$key}{acted};
+            $self->removeEntry('adus',$adus->{$key}{adus_id});
+        }
+    }
     if ($recId){
         my @setValues;
         my $sqlSet = 'SET '.join(", ", map {
@@ -935,13 +1184,14 @@ sub getRows {
     my $self = shift;
     my $dbh = $self->dbh;
     my $table = shift;
+    my $search = shift;
     my $limit = shift;
     my $offset = shift;
     my $sortCol = shift;
     my $desc = (shift) ? 'DESC' : 'ASC';
     my $ORDER ='';
     if ($sortCol){
-       $ORDER = 'ORDER BY '.$dbh->quota_identifier($sortCol).' '.$desc;
+       $ORDER = 'ORDER BY '.$dbh->quote_identifier($sortCol).' '.$desc;
     }
     my $data;
     given($table){
@@ -959,7 +1209,7 @@ SQL_END
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->adminMode ? 1 : 0,$self->userId,$limit,$offset);
 SELECT *
   FROM user
-  WHERE ? = 1 OR user_id = ?
+  WHERE 1 = ? OR user_id = ?
   $ORDER
   LIMIT ? OFFSET ?
 SQL_END
@@ -967,7 +1217,10 @@ SQL_END
         }
         when ('resv'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
-SELECT resv_id, resv_room, datetime(resv_start) as resv_start, resv_len,resv_price,resv_subj,resv_extra
+SELECT resv_id, resv_room, resv_start, resv_len,resv_price,resv_subj,resv_extra,
+       date(resv_start,'unixepoch') as day,
+       time(resv_start,'unixepoch') as start,
+       time(resv_start + resv_len * 3600, 'unixepoch') as end
   FROM resv
   WHERE resv_addr = ?
   $ORDER
@@ -977,7 +1230,8 @@ SQL_END
         }
         when ('acct'){
             $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
-SELECT *
+SELECT *,
+        date(acct_date,'unixepoch') as date
   FROM acct
   WHERE acct_addr = ?
   $ORDER

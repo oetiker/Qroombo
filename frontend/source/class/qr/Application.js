@@ -43,12 +43,6 @@ qx.Class.define("qr.Application", {
                 right  : 0
             });
 
-            var tokenfield = this._mkTokenfield();
-
-            [ 'yes', 'you', 'sir' ].forEach(function(str) {
-                tokenfield.addToken({ label : str }, true);
-            });
-
             var rpc = qr.data.Server.getInstance();
 
             rpc.callAsyncSmart(function(ret) {
@@ -72,45 +66,8 @@ qx.Class.define("qr.Application", {
                     right : 10
                 });
 
-                root.add(tokenfield, {
-                    top  : 10,
-                    left : 10
-                });
             },
             'getConfig');
-        },
-
-
-        /**
-         * TODOC
-         *
-         * @return {var} TODOC
-         */
-        _mkTokenfield : function() {
-            var t = new qr.ui.Token().set({
-                width         : 500,
-                maxWidth      : 500,
-                selectionMode : 'multi'
-            });
-
-            /*
-             * listens for event to load data from the server. here, we
-             * do a simple mockup with a small timeout to simulate a server request
-             */
-
-            t.addListener("loadData", function(e) {
-                var str = e.getData();
-                var data = [];
-
-                for (var i=0; i<(Math.floor(Math.random()*10)+3); i++) {
-                    data.push({ label : str + " " + i });
-                }
-
-                t.populateList(str, data);
-            },
-            this);
-
-            return t;
         }
     }
 });

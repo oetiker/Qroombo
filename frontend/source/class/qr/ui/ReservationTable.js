@@ -27,14 +27,7 @@ qx.Class.define("qr.ui.ReservationTable", {
         var editBtn = new qx.ui.form.Button(this.tr('Edit'), 'icon/22/actions/document-properties.png');
         tb._add(editBtn);
         tb._add(delBtn);
-        var model = new qr.data.RemoteTableModel('reservations');
-
-        model.setColumns([ this.tr('ResId'), this.tr('Date'), this.tr('Time'), this.tr('User'), this.tr('Room'), this.tr('Subject') ],
-        [ 'resid', 'date', 'time', 'user', 'room', 'subj' ]);
-
-        var widths = [ 1, 1, 1, 2, 2, 5 ];
-
-        var control = new qr.ui.Table(model, widths);
+        var control = new qr.ui.TabView('resv');
         this._add(control);
     }
 });

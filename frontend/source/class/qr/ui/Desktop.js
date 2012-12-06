@@ -83,9 +83,10 @@ qx.Class.define("qr.ui.Desktop", {
             this);
 
             tabs.booker.add(qr.ui.Navigator.getInstance());
+            var cfg = qr.data.Config.getInstance();
             tabs.res.add(qr.ui.ReservationTable.getInstance());
             tabs.acct.add(qr.ui.AccountingTable.getInstance());
-            tabs.user.add(qr.ui.ContactTable.getInstance());
+            tabs.user.add(qr.ui.UserTable.getInstance());
             tabs.addr.add(qr.ui.AddressTable.getInstance());
         }
     }

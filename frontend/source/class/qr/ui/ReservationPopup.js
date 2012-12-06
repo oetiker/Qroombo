@@ -213,7 +213,7 @@ qx.Class.define("qr.ui.ReservationPopup", {
 
                     rpc.callAsyncSmart(function(data) {
                         that._resv = data;
-                        that._form.setData(data, true);* /* only set fields that are available */
+                        that._form.setData(data, true); /* only set fields that are available */
                         that.setEnabled(true);
                     },
                     'getEntry', 'resv', resvId);

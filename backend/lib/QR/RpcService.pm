@@ -36,6 +36,7 @@ our %allow = (
     logout => 1,
     sendKey => 1,
     getForm => 1,
+    getTabView => 1,
     getPrice => 1,
     setAddrId => 2,
     getEntry => 3,
@@ -62,7 +63,7 @@ sub allow_rpc_access {
     $self->database->addrId($addrId);
     $self->database->adminMode($adminMode);
     die mkerror(3948,q{access denied}) unless $allow{$method};
-    die mkerror(8833,q{anonymous access denied}) if $allow{$method} > 1 and not $userId;
+    die mkerror(8833,"anonymous access denied ($method)") if $allow{$method} > 1 and not $userId;
     die mkerror(3844,q{billing address required}) if $allow{$method} > 2 and not $addrId;
     return $allow{$method}; 
 }
@@ -77,6 +78,7 @@ get some gloabal configuration information into the interface
 sub getConfig {
     my $self = shift;
     my $cfg = $self->config->cfg;
+    my $db = $self->database;
     my $ret = {
         cfg => {
             reservation => $cfg->{RESERVATION},
@@ -85,11 +87,15 @@ sub getConfig {
                 title => $cfg->{GENERAL}{title},
                 currency => $cfg->{GENERAL}{currency},
             }
+        },
+        tabView => {
+            map {
+                $_ => $db->getTableView($_)
+            } qw(resv user addr acct)
         }
     };
     my $userId = $self->controller->session('userId');
     my $adminMode = $self->controller->session('adminMode');    
-    my $db = $self->database;
     $db->adminMode($adminMode);
     if ($userId){
         $ret->{user} = $db->getEntry('user',$userId);
@@ -108,6 +114,17 @@ for the given table.
 sub getForm {
     my $self = shift;    
     return $self->database->getForm(@_);
+}
+
+=head2 getTabView(table)
+
+Call corresponding method in L<QR::Database> to get the definition for the view table.
+
+=cut  
+
+sub getTabView {
+    my $self = shift;    
+    return $self->database->getTabView(@_);
 }
 
 =head2 getCalendarDay(date)
@@ -230,7 +247,7 @@ sub getPrice {
     return shift->database->getPrice(@_);
 }
 
-=head2 getRowCount(table)
+=head2 getRowCount(table,search)
 
 Get the number of table rows.
 
@@ -241,7 +258,7 @@ sub getRowCount {  ## no critic (RequireArgUnpacking)
     return $self->database->getRowCount(@_);
 }
 
-=head2 getRows(table,limit,offset,sortCol,sortDirection)
+=head2 getRows(table,search,limit,offset,sortCol,desc?)
 
 Get the rows.
 

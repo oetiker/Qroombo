@@ -13,7 +13,7 @@
 /**
  * The searchView with search box, table and view area
  */
-qx.Class.define("qr.ui.ContactTable", {
+qx.Class.define("qr.ui.UserTable", {
     extend : qx.ui.core.Widget,
     type : 'singleton',
 
@@ -23,18 +23,11 @@ qx.Class.define("qr.ui.ContactTable", {
         var tb = new qx.ui.core.Widget().set({ paddingBottom : 8 });
         tb._setLayout(new qx.ui.layout.HBox(5));
         this._add(tb);
-        var addBtn = new qx.ui.form.Button(this.tr('Add Contact'), 'icon/22/actions/contact-new.png');
+        var addBtn = new qx.ui.form.Button(this.tr('Add User'), 'icon/22/actions/contact-new.png');
         tb._add(addBtn);
-        var editBtn = new qx.ui.form.Button(this.tr('Edit Contact'), 'icon/22/actions/document-properties.png');
+        var editBtn = new qx.ui.form.Button(this.tr('Edit User'), 'icon/22/actions/document-properties.png');
         tb._add(editBtn);
-        var model = new qr.data.RemoteTableModel('contact');
-
-        model.setColumns([ this.tr('ContactId'), this.tr('First Name'), this.tr('Last Name'), this.tr('eMail'), this.tr('Phone 1'), this.tr('Phone 2') ],
-        [ 'contactid', 'first', 'last', 'email', 'phone1', 'phone2' ]);
-
-        var widths = [ 1, 3, 3, 3, 2, 2 ];
-
-        var control = new qr.ui.Table(model, widths);
+        var control = new qr.ui.TabView('user');
         this._add(control);
     }
 });

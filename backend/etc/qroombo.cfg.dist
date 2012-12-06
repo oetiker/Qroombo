@@ -65,8 +65,6 @@ return [
     key => 'allow_free',
     label => 'Gratis',
     widget => 'checkBox',
-    tabViewPos => -1,
-    tabViewWidth => 1,
     set => {
         label => 'Gratis Miete erlauben',
     },

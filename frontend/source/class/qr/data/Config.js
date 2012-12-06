@@ -40,7 +40,7 @@ qx.Class.define('qr.data.Config', {
         _addrId : null,
         _userData : null,
         _addrList : null,
-
+        _tabView: null,
 
         /**
          * TODOC
@@ -60,6 +60,7 @@ qx.Class.define('qr.data.Config', {
          */
         setConfig : function(data) {
             this._cfg = data.cfg;
+            this._tabView = data.tabView;
             var res = data.cfg.reservation;
             res.first_hour = parseInt(res.first_hour);
             res.last_hour = parseInt(res.last_hour);
@@ -198,6 +199,10 @@ qx.Class.define('qr.data.Config', {
             });
 
             return ret;
+        },
+
+        getTabView: function(tab){
+            return this._tabView[tab];
         }
     }
 });

@@ -27,14 +27,7 @@ qx.Class.define("qr.ui.AddressTable", {
         tb._add(addBtn);
         var editBtn = new qx.ui.form.Button(this.tr('Edit Address'), 'icon/22/actions/document-properties.png');
         tb._add(editBtn);
-        var model = new qr.data.RemoteTableModel('addresses');
-
-        model.setColumns([ this.tr('AddrId'), this.tr('Name'), this.tr('Street'), this.tr('Zip'), this.tr('Town'), this.tr('Phone'), this.tr('Balance') ],
-        [ 'addrid', 'name', 'street', 'zip', 'town', 'phone', 'balance' ]);
-
-        var widths = [ 1, 3, 3, 3, 3, 2 ];
-
-        var control = new qr.ui.Table(model, widths);
+        var control = new qr.ui.TabView('addr');
         this._add(control);
     }
 });

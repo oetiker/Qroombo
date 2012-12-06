@@ -4266,7 +4266,12 @@ fi
 
 
 
-HTDOCSDIR=${prefix}/htdocs
+actual_prefix=$prefix
+if test x$actual_prefix = xNONE; then
+    actual_prefix=$ac_default_prefix
+fi
+
+HTDOCSDIR=${actual_prefix}/htdocs
 
 # Check whether --with-htdocs-dir was given.
 if test "${with_htdocs_dir+set}" = set; then :
@@ -4317,15 +4322,11 @@ fi
 
 mod_ok=1
 if test "$enable_pkgonly" != yes; then
-   prfx=$prefix
-   if test x$prfx = xNONE; then
-       prfx=$ac_default_prefix
-   fi
    for module in $PERL_MODULES
    do
      { $as_echo "$as_me:${as_lineno-$LINENO}: checking checking for perl module '$module'" >&5
 $as_echo_n "checking checking for perl module '$module'... " >&6; }
-     if ${PERL} -I$prfx/thirdparty/lib/perl5 -e 'use '$module 2>/dev/null ; then
+     if ${PERL} -I$actual_prefix/thirdparty/lib/perl5 -e 'use '$module 2>/dev/null ; then
          { $as_echo "$as_me:${as_lineno-$LINENO}: result: Ok" >&5
 $as_echo "Ok" >&6; }
      else
@@ -4348,7 +4349,7 @@ $as_echo "Failed" >&6; }
    You can install local copies of the missing modules
    by running
 
-     ./setup/build-perl-modules.sh ${prfx}/thirdparty
+     ./setup/build-perl-modules.sh ${actual_prefix}/thirdparty
 
 NOTES
       exit 1
