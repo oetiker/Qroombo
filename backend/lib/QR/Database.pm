@@ -1220,7 +1220,7 @@ SQL_END
 SELECT resv_id, resv_room, resv_start, resv_len,resv_price,resv_subj,resv_extra,
        date(resv_start,'unixepoch') as day,
        time(resv_start,'unixepoch') as start,
-       time(resv_start + resv_len * 3600, 'unixepoch') as end
+       time(resv_start + resv_len * 3600-1, 'unixepoch') as end
   FROM resv
   WHERE resv_addr = ?
   $ORDER
