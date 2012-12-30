@@ -92,10 +92,10 @@ qx.Class.define("qr.ui.AutoForm", {
                     tm[s.key] = 'bool';
                     break;
 
-                case 'tokenField':
-                    control = new qr.ui.TokenField();                    
-                    tm[s.key] = 'tokenArray';
-                    break;
+//                case 'tokenField':
+//                    control = new qr.ui.TokenField();                    
+//                    tm[s.key] = 'tokenArray';
+//                    break;
 
                 case 'selectBox':
                     control = new qx.ui.form.SelectBox();

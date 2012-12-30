@@ -23,11 +23,17 @@ qx.Class.define("qr.ui.UserTable", {
         var tb = new qx.ui.core.Widget().set({ paddingBottom : 8 });
         tb._setLayout(new qx.ui.layout.HBox(5));
         this._add(tb);
-        var addBtn = new qx.ui.form.Button(this.tr('Add User'), 'icon/22/actions/contact-new.png');
-        tb._add(addBtn);
-        var editBtn = new qx.ui.form.Button(this.tr('Edit User'), 'icon/22/actions/document-properties.png');
-        tb._add(editBtn);
         var control = new qr.ui.TabView('user');
         this._add(control);
+
+//      var addBtn = new qx.ui.form.Button(this.tr('Add User'), 'icon/22/actions/contact-new.png');
+//      tb._add(addBtn);
+
+        var editBtn = new qx.ui.form.Button(this.tr('Edit User'), 'icon/22/actions/document-properties.png');
+        tb._add(editBtn);
+        var editPopup = new qr.ui.EditPopup('user');
+        editBtn.addListener('execute',function(){ editPopup.show(control.getSelectedRecId()) }, this );
+        editPopup.addListener('close',function(){ control.reloadData() }, this);
+
     }
 });
