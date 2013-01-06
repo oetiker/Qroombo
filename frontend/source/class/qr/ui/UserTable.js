@@ -31,7 +31,7 @@ qx.Class.define("qr.ui.UserTable", {
 
         var editBtn = new qx.ui.form.Button(this.tr('Edit User'), 'icon/22/actions/document-properties.png');
         tb._add(editBtn);
-        var editPopup = new qr.ui.EditPopup('user');
+        var editPopup = new qr.ui.EditPopup('user',this.tr("User Editor"));
         editBtn.addListener('execute',function(){ editPopup.show(control.getSelectedRecId()) }, this );
         editPopup.addListener('close',function(){ control.reloadData() }, this);
 

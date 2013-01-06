@@ -993,7 +993,9 @@ sub putEntry {
             my $adusId = $adus->{adus_id};
             die mkerror(29344,"No permission to add reservation as no matching adus entry was found")
                 if not $adusId and not $self->adminMode;
-            $rec->{resv_addr} = $self->addrId;            
+            my $existingRec = $recId ? {} : $self->getEntry($table,$recId);
+            $rec = { %$existingRec, %$rec };
+            $rec->{resv_addr} = $self->addrId;
             $rec->{resv_price} = $self->getPrice($rec);
             $extra = $self->_extraFilter('RESERVATION',$rec,'write');
         }

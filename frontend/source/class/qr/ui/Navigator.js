@@ -59,7 +59,7 @@ qx.Class.define("qr.ui.Navigator", {
                 chooser.setValue(date);
             },
             this);
-
+	   
             this.getChildControl('prev-button').addListener('execute', function() {
                 var date = new Date(chooser.getValue());
                 date.setDate(date.getDate() - 1);
@@ -77,6 +77,10 @@ qx.Class.define("qr.ui.Navigator", {
                 calPop.hide();
             },
             this);
+
+            this.addListener('appear',function(){
+                booker.reload();
+	    },this);
         },
 
 
