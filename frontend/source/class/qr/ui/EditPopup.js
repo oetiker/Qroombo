@@ -18,7 +18,7 @@ qx.Class.define("qr.ui.EditPopup", {
     extend : qx.ui.window.Window,
 
     construct : function(tableKey,title) {
-        this.base(arguments);
+        this.base(arguments,title);
 
         this.set({
             allowClose    : true,
