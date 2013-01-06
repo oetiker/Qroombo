@@ -18,7 +18,7 @@ qx.Class.define("qr.ui.EditPopup", {
     extend : qx.ui.window.Window,
 
     construct : function(tableKey,title) {
-        this.base(arguments);
+        this.base(arguments,title);
 
         this.set({
             allowClose    : true,
@@ -59,33 +59,32 @@ qx.Class.define("qr.ui.EditPopup", {
     members : {
         _cfg : null,
         _form : null,
-        _recId : null,
         _tableKey : null,
 
         /**
          * TODOC
          *
-         * @param reservation {var} TODOC
+         * @param recId|valueMap {var} 
          */
-        show : function(recId) {
+        show : function(rec) {            
             var addrId = this._cfg.getAddrId();
 
             if (!addrId) {
                 return;
             }
-
-            if (this._form) {
-                this.setRecId(recId);
-                this.base(arguments);
+            if (!this._form) {
+                this.addListenerOnce('changeForm', function(){this.show(rec)}, this);
+                return;
+            }
+            
+            if (qx.lang.Type.isObject(rec)){
+                this.setRecId(null);
+                this._form.setData(rec, true); /* only set fields that are available */
             }
             else {
-                this.addListenerOnce('changeForm', function() {
-                    this.setRecId(recId);
-                    this.base(arguments);
-                },
-                this);
+                this.setRecId(rec);
             }
-            this._recId = recId;
+            this.base(arguments);  
         },
 
 
@@ -101,18 +100,12 @@ qx.Class.define("qr.ui.EditPopup", {
             var addrId = e && e.getData() || qr.data.Config.getInstance().getAddrId();
 
             if (this._lastAddrId == addrId) {
-                return;
+                return false;
             }
 
             this._lastAddrId = addrId;
             var that = this;
             this.setEnabled(false);
-
-            var currencyFormat = new qx.util.format.NumberFormat().set({
-                maximumFractionDigits : 2,
-                minimumFractionDigits : 2,
-                prefix                : qr.data.Config.getInstance().getCurrency() + ' '
-            });
 
             if (that._form) {
                 that.remove(that._form);
@@ -144,7 +137,7 @@ qx.Class.define("qr.ui.EditPopup", {
                 rpc.callAsyncSmart(function(ret) {
                     that.close();
                 },
-                'removeEntry', this._tableKey, this._recId);
+                'removeEntry', this._tableKey, this.getRecId());
             },
             this);
 
@@ -168,7 +161,7 @@ qx.Class.define("qr.ui.EditPopup", {
                 rpc.callAsyncSmart(function(ret) {
                     that.close();
                 },
-                'putEntry', this._tableKey, this._recId, data);
+                'putEntry', this._tableKey, this.getRecId(), data);
             },
             this);
 
