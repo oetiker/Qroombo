@@ -34,7 +34,8 @@ qx.Class.define("qr.ui.Booker", {
     properties : {
         date : {
             check : 'Date',
-            apply : '_applyDate'
+            apply : '_applyDate',
+            init  : new Date()
         }
     },
 
@@ -164,9 +165,9 @@ qx.Class.define("qr.ui.Booker", {
                         marker.setBackgroundColor('#eef');
                     });
 
+                    var popup = qr.ui.ReservationPopup.getInstance();
                     marker.addListener('click', function() {
-                        var detail = qr.ui.ReservationPopup.getInstance();
-                        detail.show(marker.getUserData('reservation'));
+                        popup.show(marker.getUserData('reservation').getResvId());
                     },
                     this);
                 }
@@ -188,7 +189,6 @@ qx.Class.define("qr.ui.Booker", {
             marker.setLabel(String(reservation.getStartHr()) + ' - ' + String(reservation.getDuration() + reservation.getStartHr()));
             return marker;
         },
-
 
         /**
          * TODOC
@@ -395,25 +395,27 @@ qx.Class.define("qr.ui.Booker", {
             },
             this);
 
-            var resDialog = qr.ui.ReservationPopup.getInstance();
+            var popup = qr.ui.ReservationPopup.getInstance();
             var cfg = qr.data.Config.getInstance();
+
+            popup.addListener('close',this.reload,this);
 
             this.addListener('mouseup', function(e) {
                 if (down) {
                     down = false;
 
                     if (cfg.getAddrId()) {
-                        resDialog.addListenerOnce('close', function() {
+                        popup.addListenerOnce('close', function() {
                             this.fireEvent('cleardrag');
                         }, this);
 
-                        resDialog.show(new qr.data.Reservation().set({
+                        popup.show(new qr.data.Reservation().set({
                             startDate : this.getDate(),
                             startHr   : begin,
                             duration  : len,
                             roomId    : this._rowToRoomId[start.row],
                             editable  : true
-                        }));
+                        }).getResvRec());
                     }
                     else {
                         qr.ui.LoginPopup.getInstance().show();

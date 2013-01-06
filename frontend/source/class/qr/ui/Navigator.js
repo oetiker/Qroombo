@@ -23,7 +23,6 @@ qx.Class.define("qr.ui.Navigator", {
         this._setLayout(new qx.ui.layout.VBox(5, null, "separator-vertical"));
         this.getChildControl('title');
         this._connectListeners();
-        this.__chooser.setValue(new Date());
     },
 
     properties : {},
@@ -41,6 +40,7 @@ qx.Class.define("qr.ui.Navigator", {
             // calendar button
             var calBtn = this.getChildControl('title-datechooser-button');
             var calPop = this.getChildControl('datechooser-popup');
+            var chooser = this.__chooser;
 
             calBtn.addListener('click', function(e) {
                 calPop.show();
@@ -51,7 +51,7 @@ qx.Class.define("qr.ui.Navigator", {
             }, this);
 
             var booker = this.getChildControl('booker');
-            var chooser = this.__chooser;
+
 
             this.getChildControl('next-button').addListener('execute', function() {
                 var date = new Date(chooser.getValue());
@@ -70,6 +70,8 @@ qx.Class.define("qr.ui.Navigator", {
             // title updater
             var dateFormat = new qx.util.format.DateFormat(this.tr("EEEE, d. LLLL yyyy"));
 
+            chooser.setValue(new Date());
+                
             chooser.addListener('changeValue', function(e) {
                 var date = e.getData();
                 this.getChildControl('title').setValue(dateFormat.format(date));
@@ -77,10 +79,11 @@ qx.Class.define("qr.ui.Navigator", {
                 calPop.hide();
             },
             this);
+            this.getChildControl('title').setValue(dateFormat.format(chooser.getValue()));
 
             this.addListener('appear',function(){
                 booker.reload();
-	    },this);
+    	    },this);
         },
 
 

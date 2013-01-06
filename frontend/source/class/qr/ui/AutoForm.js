@@ -69,15 +69,14 @@ qx.Class.define("qr.ui.AutoForm", {
             {
                 case 'date':
                     control = new qx.ui.form.DateField().set({
-                        value       : null,
-                        dateFormat  : new qx.util.format.DateFormat(this.tr("dd.MM.yyyy")),
-                        placeholder : 'now'
+                        dateFormat  : new qx.util.format.DateFormat(this.tr("dd.MM.yyyy"))
                     });
 
                     tm[s.key] = 'date';
                     break;
 
                 case 'text':
+                case 'time':
                     control = new qx.ui.form.TextField();
                     tm[s.key] = 'text';
                     break;
@@ -92,10 +91,17 @@ qx.Class.define("qr.ui.AutoForm", {
                     tm[s.key] = 'bool';
                     break;
 
-//                case 'tokenField':
-//                    control = new qr.ui.TokenField();                    
-//                    tm[s.key] = 'tokenArray';
-//                    break;
+                case 'selectBoxRooms':
+                    var struct = cfg.structure = [];
+                    var cfgObj = qr.data.Config.getInstance();
+                    var roomIds = cfgObj.getRoomList();
+                    roomIds.forEach(function(room, row) {
+                        var roomInfo = cfgObj.getRoomInfo(room);
+                        struct.push({
+                            key: room,
+                            title: roomInfo.name
+                        });
+                    },this);
 
                 case 'selectBox':
                     control = new qx.ui.form.SelectBox();
@@ -141,16 +147,20 @@ qx.Class.define("qr.ui.AutoForm", {
                         if (/^\d+$/.test(String(data))) {
                             var d = new Date();
                             d.setTime(parseInt(data) * 1000);
-                            return d;
+                            var d2 = new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),0,0,0,0);
+                            return d2;
                         }
-
+                        if (qx.lang.Type.isDate(data)){
+                            return data;
+                        }
                         return null;
                     }
                 },
                 {
                     converter : function(data) {
-                        if (qx.lang.Type.isDate(data)) {
-                            return Math.round((data.getTime() / 1000));
+                        if (qx.lang.Type.isDate(data)) {                        
+                            var d = new Date(Date.UTC(data.getFullYear(),data.getMonth(),data.getDate(),0,0,0,0));
+                            return Math.round(d.getTime()/1000);
                         }
 
                         return null;
@@ -305,7 +315,7 @@ qx.Class.define("qr.ui.AutoForm", {
                         break;
 
                     case 'date':
-                        model[setter](new Date(value));
+                        model[setter](value);
                         break;
 
                     default:

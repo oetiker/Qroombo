@@ -29,10 +29,9 @@ qx.Class.define("qr.ui.ReservationTable", {
         tb._add(delBtn);
         var control = new qr.ui.TabView('resv');
         this._add(control);
-
-        var editPop = new qr.ui.EditPopup('resv',this.tr('Reservation Editor'));
+        var editPop = qr.ui.ReservationPopup.getInstance();
         editBtn.addListener('execute',function(){
-	    editPop.show(control.getSelectedRecId())
+    	    editPop.show(control.getSelectedRecId())
         },this);
     }
 });

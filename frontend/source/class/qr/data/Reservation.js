@@ -59,7 +59,10 @@ qx.Class.define('qr.data.Reservation', {
         /**
          * the subject of the reservation
          */
-        subject : {},
+        subject : {
+            init     : "",
+            nullable : true
+        },
 
 
         /**
@@ -143,13 +146,27 @@ qx.Class.define('qr.data.Reservation', {
                 startDate : new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 0, 0, 0),
                 startHr   : date.getUTCHours(),
                 duration  : parseInt(rec.resv_len),
-                subject   : rec.resv_subj || '-',
+                subject   : rec.resv_subj || '',
                 roomId    : rec.resv_room,
                 resvId    : rec.resv_id,
                 editable  : rec.resv_addr == this._cfg.getAddrId()
             });
 
             return this;
+        },
+
+        getResvRec : function() {
+            var sd = this.getStartDate();
+            var rd = new Date(Date.UTC(sd.getFullYear(),sd.getMonth(),sd.getDate(),0,0,0,0));
+            var ret = {
+                resv_date: rd.getTime() / 1000,
+                resv_begin: this.getStartHr() + ':00',
+                resv_end: this.getStartHr() + this.getDuration() + ':00',
+                resv_room: this.getRoomId(),
+                resv_id: this.getResvId(),
+                resv_subj: this.getSubject()
+            };
+            return ret;
         },
 
 

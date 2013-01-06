@@ -307,13 +307,31 @@ our $TABLES = _reArrange {
                 type => 'INTEGER',
                 sql => 'NOT NULL REFERENCES addr',
             },  
+            room => {
+                label => 'Room',
+                widget => 'selectBoxRooms',
+            },
             start => {
                 type => 'NUMERIC',
             },  
             len => {
                 type => 'NUMERIC',
             },
-            room => {},
+            date => {
+                label => 'Date',
+                widget => 'date',
+                virtual => 1
+            },
+            begin => {
+                label => 'Start',
+                widget => 'time',
+                virtual => 1
+            },
+            end => {
+                label => 'End',
+                widget => 'time',
+                virtual => 1
+            },
             pub => {
                 type => 'BOOL',            
                 label => 'Publish',
@@ -696,6 +714,7 @@ calculate the price for the given reservation
 sub getPrice {
     my $self = shift;
     my $resv = shift;
+    $self->_normalizeResv($resv);
     my $args = $self->_prepExtraArgs();
     my $roomCfg = $self->config->cfg->{ROOM};
     return $roomCfg->{PRICE_PL}->({
@@ -911,6 +930,10 @@ SQL_END
             if ( $self->adminMode 
                 or $rec->{resv_addr} ~~ $self->addrId ){
                 $extra = $self->_extraFilter('RESERVATION',$extra);
+                $rec->{resv_date} = timegm(0,0,0,(gmtime($rec->{resv_start}))[3,4,5]);
+                $rec->{resv_begin} = (gmtime($rec->{resv_start}))[2];
+                $rec->{resv_end} = ($rec->{resv_begin} + $rec->{resv_len}).':00';
+                $rec->{resv_begin} .= ':00';
                 return { %$extra, %$rec};
             }
         }
@@ -959,6 +982,39 @@ sub getAdusMap {
     return  $dbh->selectall_hashref('SELECT user_email,* FROM adus JOIN user ON adus_user = user_id WHERE adus_addr = ?','user_email',{Slice=>{}},$addrId);
 }    
 
+=head2 _normalizeResv(rec)
+
+normalize a reservation record
+
+=cut
+
+sub _normalizeResv {
+    my $self = shift;
+    my $rec = shift;
+
+    return if not $rec->{resv_date};
+
+    my $resvCfg = $self->config->cfg->{RESERVATION};
+
+    my $begin = int((split ':', $rec->{resv_begin})[0]);
+    die mkerror(23133,"Begin must at or after $resvCfg->{first_hour}:00") 
+        if $begin < $resvCfg->{first_hour};
+
+    my $end = int((split ':', $rec->{resv_end})[0]);
+    $end = 24 
+        if $end == 0;
+    die mkerror(23134,"End must at or before ".($resvCfg->{last_hour}+1).":00") 
+        if $end > $resvCfg->{last_hour};
+     die mkerror(23134,"The Beginning must be befor the End of your Reservation") 
+        if $begin >= $end;
+     $rec->{resv_start} = $rec->{resv_date} + $begin * 3600;
+    $rec->{resv_len} = int($end - $begin);
+    delete $rec->{resv_date};
+    delete $rec->{resv_begin};
+    delete $rec->{resv_end};
+}
+
+
 =head2 putEntry(table,id,rec)
 
 Store an entry into the table. If the id is given, overwrite an existing
@@ -966,6 +1022,7 @@ entry (given the permissions are correct) or if the id is empty, create a
 new entry (again checking the permissions first).
 
 =cut
+
 
 sub putEntry {
     my $self = shift;
@@ -993,9 +1050,10 @@ sub putEntry {
             my $adusId = $adus->{adus_id};
             die mkerror(29344,"No permission to add reservation as no matching adus entry was found")
                 if not $adusId and not $self->adminMode;
-            my $existingRec = $recId ? {} : $self->getEntry($table,$recId);
+            my $existingRec = $recId ? $self->getEntry($table,$recId) : {};
             $rec = { %$existingRec, %$rec };
             $rec->{resv_addr} = $self->addrId;
+            $self->_normalizeResv($rec);
             $rec->{resv_price} = $self->getPrice($rec);
             $extra = $self->_extraFilter('RESERVATION',$rec,'write');
         }
@@ -1052,9 +1110,19 @@ sub putEntry {
             $sqlSet .= ", $extraQ = ?";
             push @setValues, $self->json->encode($extra);
         }
-        my $count = $dbh->do(<<SQL_END,{},@setValues,$recId);
+        my $count = eval {
+            $dbh->do(<<SQL_END,{},@setValues,$recId);
 UPDATE $tableQ $sqlSet WHERE $recIdQ = ?
 SQL_END
+        };
+
+        if ($@){
+            if ($@ =~ /overlap/){
+                die mkerror(58224,"Can't perform the update as your new entry would overlap with an existing one");
+            }
+            die $@;
+        }
+
         if ($count != 1){
             die mkerror(3993,"wanted to update one record in $tableQ, succeded in updating $count");
         }
