@@ -20,37 +20,13 @@ qx.Class.define('qr.data.Config', {
             event    : 'changeUserId',
             init     : null,
             nullable : true
-        },
-
-        addrId : {
-            event    : 'changeAddrId',
-            init     : null,
-            nullable : true,
-            apply    : '_onAddrIdChange'
-        },
-
-        addrList : {
-            event : 'changeAddrList',
-            init  : []
         }
     },
 
     members : {
         _cfg : null,
-        _addrId : null,
         _userData : null,
-        _addrList : null,
         _tabView: null,
-
-        /**
-         * TODOC
-         *
-         * @param newValue {var} TODOC
-         * @param oldValue {var} TODOC
-         */
-        _onAddrIdChange : function(newValue, oldValue) {
-            this._userData.user_addr = newValue;
-        },
 
 
         /**
@@ -67,11 +43,6 @@ qx.Class.define('qr.data.Config', {
 
             if (data.user && data.user.user_id) {
                 this.setUserData(data.user);
-            }
-
-            if (data.addrs && data.addrs.length > 0) {
-                this.setAddrList(data.addrs);
-                this.setAddrId(data.user.user_addr);
             }
         },
 
@@ -132,8 +103,6 @@ qx.Class.define('qr.data.Config', {
          *
          */
         clearUserData : function() {
-            this.setAddrId(null);
-            this.setAddrList([]);
             this._userData = null;
             this.setUserId(null);
         },
@@ -147,7 +116,6 @@ qx.Class.define('qr.data.Config', {
         setUserData : function(data) {
             this._userData = data;
             this.setUserId(data.user_id);
-            this.setAddrId(data.user_addr);
         },
 
 
@@ -164,41 +132,6 @@ qx.Class.define('qr.data.Config', {
             }
 
             return uD.user_first + ' ' + uD.user_last;
-        },
-
-
-        /**
-         * TODOC
-         *
-         * @return {null | var} TODOC
-         */
-        getUserAddr : function() {
-            var aI = this.getAddrId();
-
-            if (!aI) {
-                return null;
-            }
-
-            var aL = this.getAddrList();
-            var ret = this.getUserName();
-
-            if (aL.length == 1) {
-                return ret;
-            }
-
-            aL.forEach(function(ad) {
-                if (ad.addr_id == aI) {
-                    if (ad.addr_org) {
-                        ret += ' / ' + ad.addr_org;
-                    } else {
-                        ret += ' / ' + ad.addr_str;
-                    }
-
-                    ret += ', ' + ad.addr_town;
-                }
-            });
-
-            return ret;
         },
 
         getTabView: function(tab){

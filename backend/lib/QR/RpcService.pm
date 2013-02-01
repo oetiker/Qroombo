@@ -38,8 +38,8 @@ our %allow = (
     getForm => 1,
     getTabView => 1,
     getPrice => 1,
-    setAddrId => 2,
     getEntry => 3,
+    getAddrList => 3,
     putEntry => 3,
     removeEntry => 3,
     getRowCount => 3,
@@ -57,14 +57,11 @@ sub allow_rpc_access {
     my $self = shift;
     my $method = shift;    
     my $userId = $self->controller->session('userId');
-    my $addrId = $self->controller->session('addrId');
     my $adminMode = $self->controller->session('adminMode');
     $self->database->userId($userId);
-    $self->database->addrId($addrId);
     $self->database->adminMode($adminMode);
     die mkerror(3948,q{access denied}) unless $allow{$method};
     die mkerror(8833,"anonymous access denied ($method)") if $allow{$method} > 1 and not $userId;
-    die mkerror(3844,q{billing address required}) if $allow{$method} > 2 and not $addrId;
     return $allow{$method}; 
 }
    
@@ -99,7 +96,6 @@ sub getConfig {
     $db->adminMode($adminMode);
     if ($userId){
         $ret->{user} = $db->getEntry('user',$userId);
-        $ret->{addrs} = $db->getRows('addr',1000,0);
     }
     return $ret;
 }
@@ -169,10 +165,8 @@ sub login {
     $self->controller->session('adminMode', $adminMode);
     $db->adminMode($adminMode);
     my $user = $db->getEntry('user',$userId);
-    $self->setAddrId($user->{user_addr});
     return {
         user => $user,
-        addrs => $db->getRows('addr',1000,0)
     }
 }
 
@@ -186,24 +180,9 @@ sub logout {
     my $self = shift;
     $self->controller->session('adminMode',undef);
     $self->controller->session('userId',undef);
-    $self->controller->session('addrId',undef);
     return 1;
 }
 
-
-=head2 setAddrId(addrId)
-
-Call the corresponding method in L<QR::Database> to select the billing
-address and return appropriate forms for editing the data.
-
-=cut
-
-sub setAddrId {
-    my $self = shift;
-    my $addrId = $self->database->setAddrId(@_); 
-    $self->controller->session('addrId',$addrId);
-    return $addrId;
-}
 
 =head2 putEntry(table,recId,rec)
 
@@ -225,6 +204,16 @@ a new entry is created.
 
 sub getEntry {
     return shift->database->getEntry(@_);
+}
+
+=head2 getAddrList()
+
+Return the list of addresses the user can select from
+
+=cut
+
+sub getAddrList {
+    return shift->database->getAddrList();
 }
 
 =head2 removeEntry(table,recId)

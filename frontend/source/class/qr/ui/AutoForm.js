@@ -91,7 +91,40 @@ qx.Class.define("qr.ui.AutoForm", {
                     tm[s.key] = 'bool';
                     break;
 
-                case 'selectBoxRooms':
+                case 'selectBoxAddr':
+                    control = new qx.ui.form.SelectBox();
+                    var ctrl = this._boxCtrl[s.key] = new qx.data.controller.List(null, control, 'title');
+                    ctrl.setDelegate({
+                        bindItem : function(controller, item, index) {
+                            controller.bindProperty('key', 'model', null, item, index);
+                            controller.bindProperty('title', 'label', null, item, index);
+                        }
+                    });
+
+                    var sbModel = qx.data.marshal.Json.createModel([{
+                        title : 'Loading Address List',
+                        key   : null
+                    }]);
+                    ctrl.set({
+                        model: sbModel
+                    });
+		    var rpc = qr.data.Server.getInstance();
+     	            var that = this;		    
+		    (function(){ // must remember the key to make sure we fill the right box
+                        var key = s.key;
+                        rpc.callAsyncSmart(function(addrList) {
+                            if (addrList.length > 1){
+                                addrList.unshift({
+                                    key: null,
+                                    title: that.tr("Select an Address")
+                                });
+                            }
+                            that.setSelectBoxData(key,addrList);
+                        },'getAddrList');
+                     })();
+                    break;
+
+                case 'selectBoxRoom':
                     var struct = cfg.structure = [];
                     var cfgObj = qr.data.Config.getInstance();
                     var roomIds = cfgObj.getRoomList();
@@ -167,7 +200,7 @@ qx.Class.define("qr.ui.AutoForm", {
                     }
                 });
             }
-        }
+        };
 
         var model = this._model = formCtrl.createModel(true);
 

@@ -404,7 +404,7 @@ qx.Class.define("qr.ui.Booker", {
                 if (down) {
                     down = false;
 
-                    if (cfg.getAddrId()) {
+                    if (cfg.getUserId()) {
                         popup.addListenerOnce('close', function() {
                             this.fireEvent('cleardrag');
                         }, this);

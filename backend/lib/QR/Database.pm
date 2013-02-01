@@ -21,8 +21,6 @@ QR::Database - qroombo database
         config => $cfg
  );
 
- $db->user('tobi@oetiker.ch');
-
 =head1 DESCRIPTION
 
 Provide permanent storage for qroombo data.
@@ -54,14 +52,6 @@ no user is set.
 
 has 'userId';
 
-=head3 addrId
-
-the current billing address.
-
-=cut
-
-has 'addrId';
-
 =head3 adminMode;
 
 are we running in admin mode ?
@@ -86,7 +76,6 @@ the handle to the SQLite db
 
 has 'dbh';
 
-has encodeUtf8  => sub { find_encoding('utf8') };
 has json        => sub { Mojo::JSON->new };
 has log         => sub { croak "log handler is required" };
 
@@ -187,14 +176,18 @@ our $TABLES = _reArrange {
                 label => 'Phone',
                 opt => 1
             },
+            blocked => {
+                label => 'Message',
+                access => {
+                    admin => 'read',
+                    user  => 'none'
+                },
+                opt => 1
+            },
             extra => {
                 opt => 1
             },
-            addr => {
-                type => 'INTEGER',
-                opt => 1,
-                sql => 'REFERENCES addr',
-            }
+            
         ]
     },
     addr => {
@@ -295,6 +288,9 @@ our $TABLES = _reArrange {
                 label => 'End',
                 width => 1
             },
+            resv_addr => {
+                label => 'Address'
+            },
             resv_price => {
                 width => 1,
             },
@@ -303,13 +299,22 @@ our $TABLES = _reArrange {
             },
         ],
         fields => [
-            addr => {
+            user => {
                 type => 'INTEGER',
-                sql => 'NOT NULL REFERENCES addr',
+                sql => 'REFERENCES user',
             },  
+            lastedit => {
+                type => 'DATETIME',
+            },            
             room => {
                 label => 'Room',
-                widget => 'selectBoxRooms',
+                widget => 'selectBoxRoom',
+            },
+            addr => {
+                type => 'INTEGER',
+                sql => 'REFERENCES addr',
+                label => 'Address',
+                widget => 'selectBoxAddr',
             },
             start => {
                 type => 'NUMERIC',
@@ -352,6 +357,10 @@ our $TABLES = _reArrange {
             subj => {
                 label => 'Subject'
             },  
+            note => {
+                label => 'Note',
+                opt => 1
+            },
             extra => {
                 opt => 1
             },    
@@ -692,9 +701,6 @@ sub login {
                 adus_user => $userId,
                 adus_admin => 1
             });
-            $self->putEntry('user',$userId,{
-                user_addr => $addrId
-            });
         };
         if ($@){
             $self->dbh->rollback;
@@ -716,38 +722,40 @@ sub getPrice {
     my $resv = shift;
     $self->_normalizeResv($resv);
     my $args = $self->_prepExtraArgs();
-    my $roomCfg = $self->config->cfg->{ROOM};
+    my $roomCfg = $self->config->cfg->{ROOM};    
+    my $addr = $self->getEntry('addr',$resv->{resv_addr});
+    my $user = $self->getEntry('user',$self->userId);
     return $roomCfg->{PRICE_PL}->({
         %$args, 
         resv => $resv,
+        addr => $addr,
+        user => $user,
         room =>  $roomCfg->{info}{$resv->{resv_room}}{DATA_PL}->({ %$args, resv=> $resv })
     });            
 }
     
-=head2 setAddrId(id)
 
-Activate the given address id for the user
+=head2 getAddrList()
+
+get a list of addresses the current user can select from
 
 =cut
 
-sub setAddrId {
+sub getAddrList {
     my $self = shift;
-    my $addrId = shift;
-    if (not $self->adminMode){
-        my $row = $self->dbh->selectrow_hashref(<<SQL_END,{},$self->userId,$addrId);
-SELECT addr_id
+    my $dbh = $self->dbh;
+    my $ret = $dbh->selectall_arrayref(<<SQL_END,{ Slice => {}}, $self->adminMode ? 0 : 1,$self->userId);
+SELECT
+    addr_id AS key,
+    COALESCE(addr_org || ', ','') || addr_contact AS title
   FROM addr
-  JOIN adus ON addr_id = adus_addr
- WHERE adus_user = ? AND addr_id = ?
+  WHERE ? = 1 OR addr_id IN ( SELECT adus_addr FROM adus WHERE adus_user = ? )
+  ORDER BY title
 SQL_END
-        mkerror(9384,"No permission to set AddressId $addrId")
-            if not $row->{addr_id} ~~ $addrId;            
-    }
-    $self->putEntry('user',$self->userId,{
-        user_addr => $addrId
-    });
-    return $addrId;
+    return $ret
 }
+    
+
 
 =head2 getCalendarDay(date)
 
@@ -759,26 +767,22 @@ sub getCalendarDay {
     my $self = shift;
     my $date = int(shift);
     my $dbh = $self->dbh;
-    my $resArray = $dbh->selectall_arrayref(<<SQL_END,{ Slice => {}},$date);
+    my $resArray = $dbh->selectall_arrayref(<<SQL_END,{ Slice => {}},$date,$self->userId);
 SELECT
     resv_id,
     resv_room,
     resv_start,
     resv_len,
     resv_pub,
-    resv_subj,
-    resv_addr
+    CASE WHEN resv_pub = 1 OR adus_id IS NOT NULL THEN resv_subj ELSE '-' END AS resv_subj,
+    CASE WHEN resv_pub = 1 OR adus_id IS NOT NULL THEN COALESCE(addr_org || ', ','') || addr_contact END AS resv_addr,
+    CASE WHEN adus_id IS NOT NULL THEN 1 ELSE 0 END AS editable
   FROM resv
+  JOIN addr ON resv_addr = addr_id
+  LEFT JOIN adus ON addr_id = adus_addr AND adus_user = ?2
   WHERE resv_start < CAST(?1 AS INTEGER)  + 24 * 3600 AND 3600 * resv_len + resv_start > CAST(?1 AS INTEGER)
 SQL_END
-    my @ret;
-    my $addrId = $self->addrId;
-    for my $res (@$resArray){
-        my $mine = $res->{resv_addr} ~~ $addrId;
-        $res->{resv_subj} = ( $res->{resv_pub} or $mine ) ? $res->{resv_subj} : undef;
-        push @ret, $res;
-    }
-    return \@ret;
+    return $resArray;
 }
 
 
@@ -812,20 +816,16 @@ sub _getRawEntry {
 # create arguments to be supplied to the EXTRA_FIELDS_PL function
 sub _prepExtraArgs {
     my $self = shift;
-    my $args = {
-        user => $self->_getRawEntry('user','user_id',$self->userId),
-        addr => $self->_getRawEntry('addr','addr_id',$self->addrId),
-        adminMode => $self->adminMode
-    };
-    for my $table (qw(user addr)){
-        my $rec = $args->{$table};
-        if ($rec->{$table.'_extra'}){
-            my $extra = $self->json->decode($rec->{$table.'_extra'});
-            delete $rec->{$table.'_extra'};
-            map {$rec->{$_} = $extra->{$_}} keys %$extra;
-        }
+    my $rec = $self->_getRawEntry('user','user_id',$self->userId);
+    if ($rec->{user_extra}){
+        my $extra = $self->json->decode($rec->{user_extra});
+        delete $rec->{user_extra};
+        map {$rec->{$_} = $extra->{$_}} keys %$extra;
     }
-    return $args;
+    return {
+        user => $rec,
+        adminMode => $self->adminMode,
+    }
 }
 
 sub _getExtraFields {
@@ -894,7 +894,7 @@ sub getEntry {
         when ('addr') {
             my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$recId,$self->userId); 
             if ($self->adminMode or $adus->{adus_id}){
-                my $users = $dbh->selectall_arratref(<<SQL_END,{Slice=>{}},$recId);
+                my $users = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$recId);
 SELECT user_email,adus_admin
   FROM adus
   JOIN user ON ( adus_user = user_id )
@@ -927,8 +927,8 @@ SQL_END
             }
         }
         when ('resv'){
-            if ( $self->adminMode 
-                or $rec->{resv_addr} ~~ $self->addrId ){
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{}, $rec->{resv_addr},$self->userId); 
+            if ( $self->adminMode or $adus->{adus_id}){
                 $extra = $self->_extraFilter('RESERVATION',$extra);
                 $rec->{resv_date} = timegm(0,0,0,(gmtime($rec->{resv_start}))[3,4,5]);
                 $rec->{resv_begin} = (gmtime($rec->{resv_start}))[2];
@@ -938,15 +938,9 @@ SQL_END
             }
         }
         when ('acct'){
-            if ( $self->adminMode
-               or $rec->{acct_addr} ~~ $self->addrId ){
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{}, $rec->{acct_addr},$self->userId);
+            if ( $self->adminMode or $adus->{adus_id}){
                 return $rec;
-            }
-        }
-        when ('adus'){
-            if ( $self->adminMode
-               or $rec->{adus_addr} ~~ $self->addrId ){
-               return $rec;
             }
         }
     }
@@ -1046,13 +1040,14 @@ sub putEntry {
             $extra = $self->_extraFilter('USRE',$rec,'write');
         }
         when ('resv'){
-            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
-            my $adusId = $adus->{adus_id};
-            die mkerror(29344,"No permission to add reservation as no matching adus entry was found")
-                if not $adusId and not $self->adminMode;
             my $existingRec = $recId ? $self->getEntry($table,$recId) : {};
             $rec = { %$existingRec, %$rec };
-            $rec->{resv_addr} = $self->addrId;
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$rec->{resv_addr},$self->userId);
+            my $adusId = $adus->{adus_id};
+            $rec->{resv_lastedit} = time;
+            $rec->{resv_user} = $self->userId;
+            die mkerror(29344,"No permission to add reservation as no matching adus entry was found")
+                if not $adusId and not $self->adminMode;
             $self->_normalizeResv($rec);
             $rec->{resv_price} = $self->getPrice($rec);
             $extra = $self->_extraFilter('RESERVATION',$rec,'write');
@@ -1061,7 +1056,7 @@ sub putEntry {
             die mkerror(8744,"Only admin can enter booking records") unless $self->adminMode;
         }
         when ('adus'){
-            my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT a1.adus_admin FROM adus AS a1 JOIN adus AS a2 ON a1.adus_addr = a2.adus_addr WHERE a2.adus_user = ? AND a1.adus_id = ?',{},$self->userId,$recId);
             die mkerror(8344,"No permissions to edit adus table") 
                 unless $self->adminMode or $adus->{adus_admin};
         }
@@ -1170,15 +1165,16 @@ sub removeEntry {
                 if  not $self->adminMode;
         }
         when ('resv'){
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus JOIN resv ON resv_addr = adus_addr WHERE adus_admin AND NOT adus_removed AND resv_id = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkerror(38345,"No permission to remove reservation entry.")
-                if not $rec->{resv_addr} ~~ $self->addrId and not $self->adminMode;
+                if not $adus->{adus_id} and not $self->adminMode;
         }
         when ('acct'){
             die mkerror(8744,"No permission to remove accounting records.")
                 if not $self->adminMode;
         }
         when ('adus'){
-            my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus WHERE adus_addr = ? AND adus_user = ?',{},$self->addrId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus AS a1 JOIN adus AS a2 ON a1.adus_addr = a2.adus_addr WHERE a2.adus_user = ? AND a1.adus_id = ?',{},$self->userId,$recId);
             die mkerror(8344,"No permissions to remove adus table entry") 
                 if not $self->adminMode and not $adus->{adus_admin};
             $self->putEntry('adus',$recId,{ adus_removed => 1 });
@@ -1198,7 +1194,7 @@ SQL_END
     return $ret;    
 }
 
-=head2 getRowCount(table)
+=head2 getRowCount(table,addrId)
 
 Return the number of rows matching the given filter.
 
@@ -1207,6 +1203,7 @@ Return the number of rows matching the given filter.
 sub getRowCount {
     my $self = shift;
     my $table = shift;
+    my $addrId = shift;
     my $dbh = $self->dbh;
     given($table){
         when ('addr'){
@@ -1224,14 +1221,14 @@ SELECT COUNT(*)
 SQL_END
         }
         when ('resv'){
-            return ($dbh->selectrow_array(<<SQL_END,{},$self->addrId))[0];
+            return ($dbh->selectrow_array(<<SQL_END,{},$addrId))[0];
 SELECT COUNT(*)
   FROM resv
   WHERE resv_addr = ?
 SQL_END
         }
         when ('acct'){
-            return ($dbh->selectrow_array(<<SQL_END,{},$self->addrId))[0];
+            return ($dbh->selectrow_array(<<SQL_END,{},$addrId))[0];
 SELECT COUNT(*)
   FROM acct
   WHERE acct_addr = ?
@@ -1244,7 +1241,7 @@ SQL_END
     return 0;
 }
 
-=head2 getRows(table,limit,offset,sort-col,desc?)
+=head2 getRows(table,addrId,limit,offset,sort-col,desc?)
 
 Returns the chosen number of rows from the table.
 
@@ -1252,13 +1249,14 @@ Returns the chosen number of rows from the table.
 
 sub getRows {
     my $self = shift;
-    my $dbh = $self->dbh;
     my $table = shift;
+    my $addrId = shift;
     my $search = shift;
     my $limit = shift;
     my $offset = shift;
     my $sortCol = shift;
     my $desc = (shift) ? 'DESC' : 'ASC';
+    my $dbh = $self->dbh;
     my $ORDER ='';
     if ($sortCol){
        $ORDER = 'ORDER BY '.$dbh->quote_identifier($sortCol).' '.$desc;
@@ -1286,12 +1284,14 @@ SQL_END
             $self->_arrayExtraFilter('USER','user',$data);
         }
         when ('resv'){
-            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$addrId,$limit,$offset);
 SELECT resv_id, resv_room, resv_start, resv_len,resv_price,resv_subj,resv_extra,
        date(resv_start,'unixepoch') as day,
        time(resv_start,'unixepoch') as start,
-       time(resv_start + resv_len * 3600-1, 'unixepoch') as end
+       time(resv_start + resv_len * 3600-1, 'unixepoch') as end,
+       COALESCE(addr_org || ', ','') || addr_contact as resv_addr
   FROM resv
+  JOIN addr ON resv_addr = addr_id
   WHERE resv_addr = ?
   $ORDER
   LIMIT ? OFFSET ?
@@ -1299,7 +1299,7 @@ SQL_END
             $self->_arrayExtraFilter('RESERVATION','resv',$data);
         }
         when ('acct'){
-            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->addrId,$limit,$offset);
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$addrId,$limit,$offset);
 SELECT *,
         date(acct_date,'unixepoch') as date
   FROM acct

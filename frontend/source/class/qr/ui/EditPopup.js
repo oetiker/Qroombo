@@ -35,7 +35,6 @@ qx.Class.define("qr.ui.EditPopup", {
 
         var cfg = this._cfg = qr.data.Config.getInstance();
 
-        cfg.addListener('changeAddrId', this._updateForm, this);
         this._tableKey = tableKey;
 
         this.addListener('appear', function() {
@@ -67,11 +66,6 @@ qx.Class.define("qr.ui.EditPopup", {
          * @param recId|valueMap {var} 
          */
         show : function(rec) {            
-            var addrId = this._cfg.getAddrId();
-
-            if (!addrId) {
-                return;
-            }
             if (!this._form) {
                 this.addListenerOnce('changeForm', function(){this.show(rec)}, this);
                 return;
@@ -97,13 +91,6 @@ qx.Class.define("qr.ui.EditPopup", {
 
             /* skip if the addr id did not really change */
 
-            var addrId = e && e.getData() || qr.data.Config.getInstance().getAddrId();
-
-            if (this._lastAddrId == addrId) {
-                return false;
-            }
-
-            this._lastAddrId = addrId;
             var that = this;
             this.setEnabled(false);
 

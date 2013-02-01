@@ -114,7 +114,6 @@ qx.Class.define("qr.ui.KeyPopup", {
                 rpc.callAsyncSmart(function(ret) {
                     that.close();
                     var cfg = qr.data.Config.getInstance();
-                    cfg.setAddrList(ret.addrs);
                     cfg.setUserData(ret.user);
                     qr.ui.Booker.getInstance().reload();
                     that.getApplicationRoot().remove(that);

@@ -190,7 +190,7 @@ ${E}head1 SYNOPSIS
  log_file = /tmp/qroombo.log
  log_level = debug
  database_dir = /tmp/qroombo
- title = Flörli Olten
+ title = FlÃ¶rli Olten
  currency = CHF
 
  *** MAIL ***

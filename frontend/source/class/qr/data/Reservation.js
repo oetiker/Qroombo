@@ -64,6 +64,14 @@ qx.Class.define('qr.data.Reservation', {
             nullable : true
         },
 
+        /**
+         * a note going along with the reservation
+         */
+        note : {
+            init     : "",
+            nullable : true
+        },
+
 
         /**
          * can this reservation be edited?
@@ -149,7 +157,8 @@ qx.Class.define('qr.data.Reservation', {
                 subject   : rec.resv_subj || '',
                 roomId    : rec.resv_room,
                 resvId    : rec.resv_id,
-                editable  : rec.resv_addr == this._cfg.getAddrId()
+                note      : rec.resv_note || '',
+                editable  : rec.editable
             });
 
             return this;
@@ -164,7 +173,8 @@ qx.Class.define('qr.data.Reservation', {
                 resv_end: this.getStartHr() + this.getDuration() + ':00',
                 resv_room: this.getRoomId(),
                 resv_id: this.getResvId(),
-                resv_subj: this.getSubject()
+                resv_subj: this.getSubject(),
+                resv_note: this.getNote()
             };
             return ret;
         },

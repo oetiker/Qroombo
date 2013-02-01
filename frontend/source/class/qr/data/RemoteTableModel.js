@@ -20,9 +20,6 @@ qx.Class.define('qr.data.RemoteTableModel', {
         this.base(arguments);
         this.__view = view;
         var cfg = qr.data.Config.getInstance();
-        cfg.addListener('changeAddrId',function(){        
-            this.reloadData();
-        },this);
     },
 
     properties : {
@@ -32,6 +29,10 @@ qx.Class.define('qr.data.RemoteTableModel', {
         search : {
             nullable : true,
             apply    : '_applySearch'
+        },
+        addrId : {
+	    nullable : true,
+	    event: 'changeAddrId'
         }
     },
 
@@ -61,7 +62,7 @@ qx.Class.define('qr.data.RemoteTableModel', {
                 // undies in a twist.
                 that._onRowCountLoaded(ret);
             },
-            'getRowCount', this.__view,this.getSearch());
+            'getRowCount', this.__view,this.getAddrId(),this.getSearch());
         },
 
 
@@ -104,7 +105,7 @@ qx.Class.define('qr.data.RemoteTableModel', {
                 // undies in a twist.
                 that._onRowDataLoaded(ret);
             },
-            'getRows', this.__view, this.getSearch(), lastRow - firstRow + 1, firstRow,sortCol,sortAsc);
+            'getRows', this.__view, this.getAddrId(), this.getSearch(), lastRow - firstRow + 1, firstRow,sortCol,sortAsc);
         }
     }
 });
