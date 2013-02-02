@@ -273,23 +273,24 @@ our $TABLES = _reArrange {
                 format => 'number'
             },
             resv_room => {
-                width => 3,
+                width => 2,
                 label => 'Room'
             },
             day => {
                 label => 'Date',
-                width => 1
+                width => 2
             },
             start => {
                 label => 'Start',
-                width => 1
+                width => 2
             },
             end => {
                 label => 'End',
-                width => 1
+                width => 2
             },
             resv_addr => {
-                label => 'Address'
+                label => 'Address',
+                width => 3,
             },
             resv_price => {
                 width => 1,
@@ -1026,13 +1027,38 @@ sub putEntry {
     my $dbh = $self->dbh;
     # can't change or set the id of a record
     delete $rec->{$table.'_id'};
+    my @adusAction;
     my $extra;
+    # check access
     given ($table) {
         when ('addr'){                       
-            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin = 1 AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkerror(95334,"No premission to edit address record")
                 unless $adus->{adus_id} or not $recId or $self->adminMode;
             $extra = $self->_extraFilter('ADDRESS',$rec,'write');
+            my $adus = $self->getAdusMap($recId);
+            for my $type ( qw(user admin) ){
+                if ($rec->{'addr_'.$type}){
+                    for my $entry ( split /[;,\s]+/, $rec->{'addr_'.$type} ) { #]]
+                        my $adusRec = $adus->{$entry};
+                        $adus->{$entry}{ok} = 1;
+                        next if $adusRec and not $adusRec->{adus_admin};
+                        my $userId = $adusRec ? $adusRec->{adus_user} : $self->getUserId($entry,1);
+                        warn "## $entry => $userId\n";
+                        # for new addr records, we do not have the record ID yet, so lets have us
+                        # a little closure to execute at the end of the procedure.
+                        push @adusAction, sub {
+                            my $recId = shift;
+                            $self->putEntry('adus',$adusRec ? $adusRec->{adus_id} : undef,{adus_addr => int($recId), adus_user => int($userId), adus_admin => $type eq 'admin' ? 1 : 0});
+                       }
+                   }
+               }
+               delete $rec->{'addr_'.$type};
+            }
+            for my $key (keys %$adus){
+                next if $adus->{$key}{ok};
+                $self->removeEntry('adus',$adus->{$key}{adus_id});
+            }        
         }
         when ('user'){
             die mkerror(38344,"No permission to edit user details")
@@ -1064,37 +1090,11 @@ sub putEntry {
             die mkerror(3945,"Table $table not open for edit");
         }
     }
+
     my $tableQ = $dbh->quote_identifier($table);          
     my $recIdQ = $dbh->quote_identifier($table.'_id');          
     my $extraQ = $dbh->quote_identifier($table.'_extra');          
     my @keys = sort keys %$rec;
-    if ($table eq 'addr'){
-        my $adus = $self->getAdusMap($recId);
-        if ($rec->{addr_user}){
-            for my $entry ( split /[;,\s]/, $rec->{addr_user} ) { #]]
-                my $rec = $adus->{$entry};
-                $adus->{$entry}{acted} = 1;
-                next if $rec and not $rec->{adus_admin};
-                my $userId = $rec ? $rec->{user_id} : $self->getUserId($entry,1);
-                $self->putEntry('adus',$rec ? $rec->{adus_id} : undef,{adus_user => $userId, adus_admin => 0});
-            }
-            delete $rec->{addr_user};
-        }
-        if ($rec->{addr_admin}){
-            for my $entry ( split /[;,\s]/, $rec->{addr_admin} ) { # ]]
-                my $rec = $adus->{$entry};
-                $adus->{$entry}{acted} = 1;
-                next if $rec and not $rec->{adus_admin};
-                my $userId = $rec ? $rec->{user_id} : $self->getUserId($entry,1);
-                $self->putEntry('adus',$rec ? $rec->{adus_id} : undef,{adus_user => $userId, adus_admin => 1});
-            }
-            delete $rec->{addr_admin};
-        }
-        for my $key (keys %$adus){
-            next if $adus->{$key}{acted};
-            $self->removeEntry('adus',$adus->{$key}{adus_id});
-        }
-    }
     if ($recId){
         my @setValues;
         my $sqlSet = 'SET '.join(", ", map {
@@ -1123,8 +1123,6 @@ SQL_END
         }
     }
     else {
-        my @setValues;
-
         my $keys = join ", ", map {
             $dbh->quote_identifier($_)
         } @keys;
@@ -1138,6 +1136,11 @@ SQL_END
             die mkerror(3993,"wanted to insert one record in $tableQ, succeded in inserting $count");
         }
         $recId = $dbh->last_insert_id("","","","");
+    }
+    # if this is a new address record, we can only insert the adus entries once we have the
+    # address record id.
+    for (@adusAction){
+        $_->($recId);
     }
     return $recId;
 }
@@ -1156,7 +1159,7 @@ sub removeEntry {
     my $rec = $self->_getRawEntry($table,$table.'_id',$recId);   
     given ($table) {
         when ('addr'){                       
-            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND NOT adus_removed AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus WHERE adus_admin AND adus_addr = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkerror(95334,"No premission to remove that address record")
                 if not $adus->{adus_id} and not $self->adminMode;
         }
@@ -1165,7 +1168,7 @@ sub removeEntry {
                 if  not $self->adminMode;
         }
         when ('resv'){
-            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus JOIN resv ON resv_addr = adus_addr WHERE adus_admin AND NOT adus_removed AND resv_id = ? AND adus_user = ?',{},$recId,$self->userId);
+            my $adus = $dbh->selectrow_hashref('SELECT adus_id FROM adus JOIN resv ON resv_addr = adus_addr WHERE resv_id = ? AND adus_user = ?',{},$recId,$self->userId);
             die mkerror(38345,"No permission to remove reservation entry.")
                 if not $adus->{adus_id} and not $self->adminMode;
         }
@@ -1174,10 +1177,9 @@ sub removeEntry {
                 if not $self->adminMode;
         }
         when ('adus'){
-            my $adus = $dbh->selectrow_hashref('SELECT adus_admin FROM adus AS a1 JOIN adus AS a2 ON a1.adus_addr = a2.adus_addr WHERE a2.adus_user = ? AND a1.adus_id = ?',{},$self->userId,$recId);
+            my $adus = $dbh->selectrow_hashref('SELECT a1.adus_admin FROM adus AS a1 JOIN adus AS a2 ON a1.adus_addr = a2.adus_addr WHERE a2.adus_user = ? AND a1.adus_id = ?',{},$self->userId,$recId);
             die mkerror(8344,"No permissions to remove adus table entry") 
                 if not $self->adminMode and not $adus->{adus_admin};
-            $self->putEntry('adus',$recId,{ adus_removed => 1 });
         }
         default {
             die mkerror(3945,"Table $table not open removal calls");
@@ -1221,10 +1223,10 @@ SELECT COUNT(*)
 SQL_END
         }
         when ('resv'){
-            return ($dbh->selectrow_array(<<SQL_END,{},$addrId))[0];
+            return ($dbh->selectrow_array(<<SQL_END,{},$self->adminMode ? 1 : 0,$self->userId))[0];
 SELECT COUNT(*)
   FROM resv
-  WHERE resv_addr = ?
+  WHERE ? = 1 OR resv_addr IN ( SELECT adus_addr FROM adus WHERE adus_user = ? )
 SQL_END
         }
         when ('acct'){
@@ -1284,7 +1286,7 @@ SQL_END
             $self->_arrayExtraFilter('USER','user',$data);
         }
         when ('resv'){
-            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$addrId,$limit,$offset);
+            $data = $dbh->selectall_arrayref(<<SQL_END,{Slice=>{}},$self->adminMode ? 1 : 0,$self->userId,$limit,$offset);
 SELECT resv_id, resv_room, resv_start, resv_len,resv_price,resv_subj,resv_extra,
        date(resv_start,'unixepoch') as day,
        time(resv_start,'unixepoch') as start,
@@ -1292,7 +1294,7 @@ SELECT resv_id, resv_room, resv_start, resv_len,resv_price,resv_subj,resv_extra,
        COALESCE(addr_org || ', ','') || addr_contact as resv_addr
   FROM resv
   JOIN addr ON resv_addr = addr_id
-  WHERE resv_addr = ?
+  WHERE  ? = 1 OR addr_id IN ( SELECT adus_addr FROM adus WHERE adus_user = ? )
   $ORDER
   LIMIT ? OFFSET ?
 SQL_END

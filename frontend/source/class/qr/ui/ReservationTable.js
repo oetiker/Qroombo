@@ -23,15 +23,19 @@ qx.Class.define("qr.ui.ReservationTable", {
         var tb = new qx.ui.core.Widget().set({ paddingBottom : 8 });
         tb._setLayout(new qx.ui.layout.HBox(5));
         this._add(tb);
-        var delBtn = new qx.ui.form.Button(this.tr('Delete'), 'icon/22/actions/dialog-close.png');
-        var editBtn = new qx.ui.form.Button(this.tr('Edit'), 'icon/22/actions/document-properties.png');
+        var editBtn = new qx.ui.form.Button(this.tr('Edit Reservation'), 'icon/22/actions/document-properties.png');
         tb._add(editBtn);
-        tb._add(delBtn);
         var control = new qr.ui.TabView('resv');
         this._add(control);
         var editPop = qr.ui.ReservationPopup.getInstance();
         editBtn.addListener('execute',function(){
     	    editPop.show(control.getSelectedRecId())
+        },this);
+        control.addListener('dblclick',function(){
+            editPop.show(control.getSelectedRecId())
+        },this);
+        editPop.addListener('close',function(){
+	    control.reloadData();
         },this);
     }
 });

@@ -66,11 +66,16 @@ qx.Class.define("qr.ui.EditPopup", {
          * @param recId|valueMap {var} 
          */
         show : function(rec) {            
+	    if (!rec){
+                qr.ui.MsgBox.getInstance().warn(this.tr("No record selected"),this.tr("Please select a record in the table below"));
+                return;
+            }
             if (!this._form) {
                 this.addListenerOnce('changeForm', function(){this.show(rec)}, this);
                 return;
             }
-            
+	    
+            this._form.reset();            
             if (qx.lang.Type.isObject(rec)){
                 this.setRecId(null);
                 this._form.setData(rec, true); /* only set fields that are available */

@@ -29,5 +29,12 @@ qx.Class.define("qr.ui.AddressTable", {
         tb._add(editBtn);
         var control = new qr.ui.TabView('addr');
         this._add(control);
+        var editPopup = new qr.ui.EditPopup('addr',this.tr("Address Editor"));
+        editBtn.addListener('execute',function(){ editPopup.show(control.getSelectedRecId()) }, this );
+        addBtn.addListener('execute',function(){ editPopup.show({}) }, this);
+        editPopup.addListener('close',function(){ control.reloadData() }, this);
+        control.addListener('dblclick',function(){
+            editPopup.show(control.getSelectedRecId())
+        },this);
     }
 });

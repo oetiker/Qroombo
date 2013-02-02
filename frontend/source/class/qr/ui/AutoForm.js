@@ -340,7 +340,7 @@ qx.Class.define("qr.ui.AutoForm", {
                 switch(this._typeMap[key])
                 {
                     case 'text':
-                        model[setter](String(value));
+                        model[setter](value ? String(value) : value);
                         break;
 
                     case 'bool':

@@ -34,6 +34,9 @@ qx.Class.define("qr.ui.UserTable", {
         var editPopup = new qr.ui.EditPopup('user',this.tr("User Editor"));
         editBtn.addListener('execute',function(){ editPopup.show(control.getSelectedRecId()) }, this );
         editPopup.addListener('close',function(){ control.reloadData() }, this);
+        control.addListener('dblclick',function(){
+            editPopup.show(control.getSelectedRecId())
+        },this);
 
     }
 });

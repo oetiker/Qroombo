@@ -67,11 +67,11 @@ qx.Class.define("qr.ui.Desktop", {
             },
             {
                 k : 'user',
-                l : this.tr('User Data')
+                l : this.tr('Users')
             },
             {
                 k : 'addr',
-                l : this.tr('Invoice Addresses')
+                l : this.tr('Addresses')
             } ].forEach(function(cfg) {
                 var page = tabs[cfg.k] = new qx.ui.tabview.Page(cfg.l).set({
                     layout  : new qx.ui.layout.Grow(),
