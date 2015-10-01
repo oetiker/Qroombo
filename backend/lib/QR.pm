@@ -66,7 +66,7 @@ sub startup {
     my $self = shift;
     my $me = $self;
     my $gcfg = $self->config->cfg->{GENERAL};
-    $self->secret($gcfg->{secret});
+    $self->secrets([$gcfg->{secret}]);
     if ($self->mode eq 'development'){
         $self->log->path(undef);    
     }
