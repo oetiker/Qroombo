@@ -14,4 +14,4 @@ our $VERSION = "0";
 local $ENV{MOJO_APP} = 'QR';
 
 # Start commands
-Mojolicious::Commands->start;
+Mojolicious::Commands->start_app('QR');
